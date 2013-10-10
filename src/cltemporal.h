@@ -3,6 +3,8 @@
 
 #include <string>
 #include <CL/cl.hpp>
+#include "cltopology.h"
+#include "clargs.h"
 
 std::string getCLError(cl_int err);
 
@@ -10,10 +12,6 @@ struct CLStats;
 class CLTemporalPooler
 {
 private:
-
-	constexpr static int ColumnCells = 20;
-	constexpr static int MaxSegments = 20;
-	constexpr static int MaxSynapses = 10;
 
 	struct CLSynapse
 	{
@@ -35,7 +33,6 @@ private:
 	};
 	struct CLSegment
 	{
-		CLSynapse synapses[MaxSynapses];
 		cl_uchar synapseCount;
 
 		// Activity of the segment
@@ -54,36 +51,39 @@ private:
 	};
 	struct CLCell
 	{
-		CLSegment segments[MaxSegments];
 		cl_uchar segmentCount;
 		cl_uchar newSegmentCount; // segments waiting to be added
 
 		// See state definitions above
 		cl_uchar state;
 	};
-	struct CLColumn
-	{
-		CLCell cells[ColumnCells];
-	};
 
 	cl::Device& m_device;
 	cl::Context& m_context;
 	cl::CommandQueue& m_commandQueue;
 
-	int m_columns;
+	const CLTopology m_topology;
+	const CLArgs m_args;
 
 	cl::KernelFunctor m_timeStepKernel;
 	cl::KernelFunctor m_computeActiveStateKernel;
 	cl::KernelFunctor m_computePredictiveState;
 	cl::KernelFunctor m_updateSynapsesKernel;
 
-	std::vector<CLColumn> m_columnData;
-	cl::Buffer m_columnDataBuffer;
+	std::vector<CLCell> m_cellData;
+	std::vector<CLSegment> m_segmentData;
+	std::vector<CLSynapse> m_synapseData;
+	cl::Buffer m_cellDataBuffer;
+	cl::Buffer m_segmentDataBuffer;
+	cl::Buffer m_synapseDataBuffer;
 	cl::Buffer m_inputDataBuffer;
+
+	void pushBuffers(bool cells = true, bool segments = true, bool synapses = true);
+	void pullBuffers(bool cells = true, bool segments = true, bool synapses = true);
 
 public:
 
-	CLTemporalPooler(cl::Device& device, cl::Context& context, cl::CommandQueue& queue, int columns);
+	CLTemporalPooler(cl::Device& device, cl::Context& context, cl::CommandQueue& queue, const CLTopology& topo, const CLArgs& args);
 	void write(const std::vector< cl_char >& activations_in, std::vector<cl_char>& results_out);
 	void getStats(CLStats& stats);
 };

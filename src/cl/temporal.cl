@@ -1,12 +1,3 @@
-
-enum {ColumnCells = 20};
-enum {MaxSegments = 20};
-enum {MaxSynapses = 10};
-__constant int SEGMENT_ACTIVATION_THRESHOLD = 5;
-__constant int SEGMENT_MIN_THRESHOLD = 3;
-__constant float CONNECTED_PERMANENCE = 0.2;
-__constant float PERMANENCE_STEP = 0.01;
-
 typedef enum {NOW, WAS} TimeStep;
 
 typedef enum {

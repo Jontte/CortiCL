@@ -19,14 +19,14 @@ public:
 	{
 		_start = clock_type::now();
 	}
-	milliseconds Elapsed() const
+	double Elapsed() const
 	{
-		return std::chrono::duration_cast<milliseconds>(clock_type::now() - _start);
+		return std::chrono::duration_cast<std::chrono::duration<double, std::ratio<1,1>>>(clock_type::now() - _start).count();
 	}
 	template <typename T, typename Traits>
 	friend std::basic_ostream<T, Traits>& operator<<(std::basic_ostream<T, Traits>& out, const Timer& timer)
 	{
-		return out << timer.Elapsed().count();
+		return out << timer.Elapsed();
 	}
 private:
 	clock_type::time_point _start;

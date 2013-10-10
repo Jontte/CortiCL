@@ -1,12 +1,4 @@
 
-enum {ColumnSynapses = 10};
-
-__constant int MIN_OVERLAP = 4;
-__constant float CONNECTED_PERMANENCE = 0.2;
-__constant float PERMANENCE_STEP = 0.01;
-__constant float BOOST_STEP = 0.01;
-__constant float DUTY_CYCLE_PERSISTENCE = 0.99;
-
 typedef struct
 {
 	float permanence;
@@ -15,7 +7,6 @@ typedef struct
 
 typedef struct
 {
-	Synapse synapses[ColumnSynapses];
 	float boost;
 	float overlap;
 	bool active;
@@ -25,7 +16,7 @@ typedef struct
 	float overlapDutyCycle;
 } Column;
 
-void kernel computeOverlap(global Column* columns, global const char* input, int inputSize)
+void kernel computeOverlap(global Column* columns, global Synapse* synapses, global const char* input, int inputSize)
 {
 	int index = get_global_id(0);
 
@@ -33,14 +24,18 @@ void kernel computeOverlap(global Column* columns, global const char* input, int
 
 	// Calculate the number of synapses that point to active input bits
 	float overlap = 0;
-	for (int i = 0; i < ColumnSynapses; ++i)
+
+	int synapseOffset = index * COLUMN_PROXIMAL_SYNAPSE_COUNT;
+	for (int i = 0; i < COLUMN_PROXIMAL_SYNAPSE_COUNT; ++i)
 	{
-		overlap += (col->synapses[i].permanence > CONNECTED_PERMANENCE) && input[col->synapses[i].target];
+		global Synapse* syn = &synapses[synapseOffset + i];
+		overlap +=
+			(syn->permanence > CONNECTED_PERMANENCE) && input[syn->target];
 	}
 
 	col->active = false;
 
-	if (overlap > MIN_OVERLAP)
+	if (overlap > COLUMN_PROXIMAL_SYNAPSE_MIN_OVERLAP)
 	{
 		col->active = true;
 		overlap *= col->boost;
@@ -52,7 +47,14 @@ void kernel computeOverlap(global Column* columns, global const char* input, int
 	col->overlap = overlap;
 }
 
-void kernel inhibitNeighbours(global Column* columns, float sparsityTarget, int nWidth, int nHeight, int regionWidth, int regionHeight)
+void kernel inhibitNeighbours(
+	global Column* columns,
+	global Synapse* synapses,
+	float sparsityTarget,
+	int nWidth,
+	int nHeight,
+	int regionWidth,
+	int regionHeight)
 {
 	int index = get_global_id(0);
 	global Column* col = &columns[index];
@@ -64,17 +66,28 @@ void kernel inhibitNeighbours(global Column* columns, float sparsityTarget, int 
 	// inhibit current column so that the neighbourhood has approximately sparsityTarget ratio of columns active
 
 	int colX = index % regionWidth;
-	int colY = index % regionWidth;
+	int colY = index / regionWidth;
 
 	int minX = colX-nWidth/2;
 	int maxX = colX+nWidth/2+1;
 	int minY = colY-nHeight/2;
 	int maxY = colY+nHeight/2+1;
 
-	if (minX < 0) minX = 0;
-	if (maxX > regionWidth) maxX = regionWidth;
-	if (minY < 0) minY = 0;
-	if (maxY > regionHeight) maxY = regionHeight;
+	if (nWidth == -1 || nHeight == -1)
+	{
+		// Global inhibition
+		minX = 0;
+		maxX = regionWidth;
+		minY = 0;
+		maxY = regionHeight;
+	}
+	else
+	{
+		if (minX < 0) minX = 0;
+		if (maxX > regionWidth) maxX = regionWidth;
+		if (minY < 0) minY = 0;
+		if (maxY > regionHeight) maxY = regionHeight;
+	}
 
 	int numActiveColumns = 0;
 
@@ -120,20 +133,20 @@ void kernel inhibitNeighbours(global Column* columns, float sparsityTarget, int 
 }
 
 
-void kernel updatePermanences(global Column* columns)
+void kernel updatePermanences(global Column* columns, global Synapse* synapses, global const char* input)
 {
 	int index = get_global_id(0);
 
 	global Column* col = &columns[index];
-
+	int columnSynapseOffset = index * COLUMN_PROXIMAL_SYNAPSE_COUNT;
 	// Update permanences
 	if (col->active)
 	{
-		for (int i = 0; i < ColumnSynapses; ++i)
+		for (int i = 0; i < COLUMN_PROXIMAL_SYNAPSE_COUNT; ++i)
 		{
-			global Synapse* syn = &col->synapses[i];
+			global Synapse* syn = &synapses[columnSynapseOffset + i];
 
-			if (syn->permanence > CONNECTED_PERMANENCE)
+			if (input[syn->target])
 			{
 				syn->permanence += PERMANENCE_STEP;
 				if (syn->permanence > 1.0)
@@ -163,9 +176,9 @@ void kernel updatePermanences(global Column* columns)
 	if (col->overlapDutyCycle < col->minDutyCycle)
 	{
 		// Increase permanences
-		for (int i = 0; i < ColumnSynapses; ++i)
+		for (int i = 0; i < COLUMN_PROXIMAL_SYNAPSE_COUNT; ++i)
 		{
-			global Synapse* syn = &col->synapses[i];
+			global Synapse* syn = &synapses[columnSynapseOffset + i];
 
 			syn->permanence += PERMANENCE_STEP;
 			if (syn->permanence > 1.0)

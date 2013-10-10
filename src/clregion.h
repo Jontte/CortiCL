@@ -11,6 +11,8 @@ std::string getCLError(cl_int err);
 
 #include "clspatial.h"
 #include "cltemporal.h"
+#include "cltopology.h"
+#include "clargs.h"
 
 struct CLStats
 {
@@ -22,7 +24,7 @@ struct CLStats
 	int maxSegments;
 	int totalSynapses;
 	int maxSynapses;
-	int averageDutyCycle;
+	double averageDutyCycle;
 };
 
 class CLRegion
@@ -31,22 +33,20 @@ private:
 	cl::CommandQueue m_commandQueue;
 
 	CLSpatialPooler m_spatialPooler;
-	CLTemporalPooler m_temporalPooler;
+// 	CLTemporalPooler m_temporalPooler;
 
 public:
 
-	CLRegion(cl::Device& device, cl::Context& context, int columns, int inputSize)
-		: m_commandQueue(context, device)
-		, m_spatialPooler(device, context, m_commandQueue, columns, inputSize)
-		, m_temporalPooler(device, context, m_commandQueue, columns)
-	{
-		std::cerr << "Device memory allocation limit: " << device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>() << std::endl;
-	};
+	CLRegion(cl::Device& device, cl::Context& context, const CLTopology& topo, const CLArgs& args);
 
 	CLRegion(const CLRegion&) = delete;
 	CLRegion(CLRegion&&) = default;
 
+	// Primary input function
 	void write(std::vector<cl_char>& activations, std::vector<cl_char>& results);
+
+	// Noisy backwards convolution: Find out what kind of bit pattern would cause the given column activation
+	void backwards(const std::vector<cl_char>& columnActivation, std::vector<double>& result);
 
 	CLStats getStats();
 };

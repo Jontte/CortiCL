@@ -21,7 +21,7 @@ add_definitions(-std=c++11 -DLINUX -Wno-deprecated-declarations)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wshadow -g -pthread")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas")
 
-add_executable(cldemo src/cldemo.cpp src/clregion.cpp src/clspatial.cpp src/cltemporal.cpp)
+add_executable(cldemo src/demo/cldemo.cpp src/demo/sensor.cpp src/clregion.cpp src/clspatial.cpp src/cltemporal.cpp src/clargs.cpp)
 
 target_link_libraries(cldemo SDL2 GL ${OPENCL_LIBRARIES})
 
