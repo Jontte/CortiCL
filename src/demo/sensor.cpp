@@ -34,8 +34,6 @@ std::vector<signed char> Sensor::encode(double value, bool learning)
 
 	if (m_histogram.empty() )
 	{
-		if (!learning)
-			return 0;
 		if (m_samples.size() < SAMPLE_WINDOW_SIZE)
 		{
 			m_samples.push_back(value);

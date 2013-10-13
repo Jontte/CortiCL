@@ -486,8 +486,7 @@ void kernel computeActiveState(
 	global Segment* g_segments,
 	global Synapse* g_synapses,
 	global const char* activeColumns,
-	uint2 seedValue,
-	bool learning)
+	uint2 seedValue)
 {
 	State state = makeState(g_cells, g_segments, g_synapses);
 	int columnIdx = get_global_id(0);
@@ -517,14 +516,11 @@ void kernel computeActiveState(
 			{
 				buPredicted = true;
 
-				if (learning)
+				setCellState(cell, ACTIVESTATE);
+				if (segmentActive(segment, WAS, LEARNSTATE))
 				{
-					setCellState(cell, ACTIVESTATE);
-					if (segmentActive(segment, WAS, LEARNSTATE))
-					{
-						lcChosen = true;
-						setCellState(cell, LEARNSTATE);
-					}
+					lcChosen = true;
+					setCellState(cell, LEARNSTATE);
 				}
 			}
 		}
@@ -540,21 +536,18 @@ void kernel computeActiveState(
 			setCellState(cell, ACTIVESTATE);
 		}
 	}
-	if (learning)
+	if (!lcChosen)
 	{
-		if (!lcChosen)
-		{
-			BestMatchingCellStruct ret = getBestMatchingCell(&state, columnIdx, WAS);
-			global Cell* learnCell = ret.cell;
-			int learnCellIdx = ret.cellIdx;
-			global Segment* learnSegment = ret.segment;
-			int learnSegmentIdx = ret.segmentIdx;
-			setCellState(learnCell, LEARNSTATE);
+		BestMatchingCellStruct ret = getBestMatchingCell(&state, columnIdx, WAS);
+		global Cell* learnCell = ret.cell;
+		int learnCellIdx = ret.cellIdx;
+		global Segment* learnSegment = ret.segment;
+		int learnSegmentIdx = ret.segmentIdx;
+		setCellState(learnCell, LEARNSTATE);
 
-			getSegmentActiveSynapses(&state, columnIdx, learnCellIdx, learnSegmentIdx, WAS, true, seedValue);
-			if (learnSegment)
-				learnSegment->sequenceSegmentQueued = true;
-		}
+		getSegmentActiveSynapses(&state, columnIdx, learnCellIdx, learnSegmentIdx, WAS, true, seedValue);
+		if (learnSegment)
+			learnSegment->sequenceSegmentQueued = true;
 	}
 }
 

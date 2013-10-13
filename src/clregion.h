@@ -43,7 +43,7 @@ public:
 	CLRegion(CLRegion&&) = default;
 
 	// Primary input function
-	void write(std::vector< cl_char >& activations, std::vector< cl_char >& results, bool learning = true, bool temporal = true);
+	void write(std::vector< cl_char >& activations, std::vector< cl_char >& results, bool temporal = true);
 
 	// Noisy backwards convolution: Find out what kind of bit pattern would cause the given column activation
 	void backwards(const std::vector<cl_char>& columnActivation, std::vector<double>& result);

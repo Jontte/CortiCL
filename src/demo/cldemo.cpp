@@ -267,7 +267,7 @@ void demo2Loop(SDL_Window* window)
 		dataIn = sensor.encode(input, learning);
 
 		// Feed SDR to region, receive activation in dataOut
-		region.write(dataIn, dataOut, learning, iterCount++ > temporalPoolerThreshold);
+		region.write(dataIn, dataOut, iterCount++ > temporalPoolerThreshold);
 
 		// Find out what kind of input would cause this kind of region activation (noisy backwards convolution)
 		region.backwards(dataOut, noisyRemap);

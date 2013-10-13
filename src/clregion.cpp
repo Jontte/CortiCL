@@ -13,9 +13,9 @@ CLRegion::CLRegion(cl::Device& device, cl::Context& context, const CLTopology& t
 {
 	std::cerr << "Device memory allocation limit: " << device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>() << std::endl;
 };
-void CLRegion::write(std::vector< cl_char >& activations, std::vector< cl_char >& results, bool learning, bool temporal)
+void CLRegion::write(std::vector< cl_char >& activations, std::vector< cl_char >& results, bool temporal)
 {
-	std::vector<cl_char> activeColumns = m_spatialPooler.write(activations, learning);
+	std::vector<cl_char> activeColumns = m_spatialPooler.write(activations);
 
 	if (!temporal)
 	{
@@ -23,7 +23,7 @@ void CLRegion::write(std::vector< cl_char >& activations, std::vector< cl_char >
 		return;
 	}
 
-	m_temporalPooler.write(activeColumns, learning, results);
+	m_temporalPooler.write(activeColumns, results);
 }
 void CLRegion::backwards(const std::vector< cl_char >& columnActivation, std::vector< double >& result)
 {

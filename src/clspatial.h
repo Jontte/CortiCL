@@ -48,7 +48,7 @@ private:
 public:
 
 	CLSpatialPooler(cl::Device& device, cl::Context& context, cl::CommandQueue& queue, const CLTopology& topo, const CLArgs& args);
-	std::vector<cl_char> write(const std::vector< cl_char >& bits, bool learning);
+	std::vector<cl_char> write(const std::vector< cl_char >& bits);
 	void backwards(const std::vector<cl_char>& columnActivation, std::vector<double>& result);
 	void getStats(CLStats& stats);
 };

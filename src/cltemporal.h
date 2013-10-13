@@ -84,7 +84,7 @@ private:
 public:
 
 	CLTemporalPooler(cl::Device& device, cl::Context& context, cl::CommandQueue& queue, const CLTopology& topo, const CLArgs& args);
-	void write(const std::vector< cl_char >& activations_in, bool learning, std::vector< cl_char >& results_out);
+	void write(const std::vector< cl_char >& activations_in, std::vector< cl_char >& results_out);
 	void getStats(CLStats& stats);
 };
 
