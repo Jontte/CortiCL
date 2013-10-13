@@ -33,7 +33,7 @@ private:
 	cl::CommandQueue m_commandQueue;
 
 	CLSpatialPooler m_spatialPooler;
-// 	CLTemporalPooler m_temporalPooler;
+	CLTemporalPooler m_temporalPooler;
 
 public:
 
@@ -43,7 +43,7 @@ public:
 	CLRegion(CLRegion&&) = default;
 
 	// Primary input function
-	void write(std::vector<cl_char>& activations, std::vector<cl_char>& results);
+	void write(std::vector< cl_char >& activations, std::vector< cl_char >& results, bool learning = true, bool temporal = true);
 
 	// Noisy backwards convolution: Find out what kind of bit pattern would cause the given column activation
 	void backwards(const std::vector<cl_char>& columnActivation, std::vector<double>& result);

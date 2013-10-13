@@ -12,11 +12,11 @@ struct CLArgs
 	int ColumnProximalSynapseCount = 10;
 	int ColumnProximalSynapseMinOverlap = 7;
 	float BoostStep = 0.01;
-	float DutyCyclePersistence = 0.95;
+	float DutyCyclePersistence = 0.99;
 
 	// Temporal pooler:
-	int ColumnCellCount = 20;
-	int CellMaxSegments = 20;
+	int ColumnCellCount = 4;
+	int CellMaxSegments = 10;
 	int SegmentMaxSynapses = 10;
 	int SegmentActivationThreshold = 5;
 	int SegmentMinThreshold = 3;

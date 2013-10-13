@@ -89,7 +89,7 @@ void CLTemporalPooler::pushBuffers(bool cells, bool segments, bool synapses)
 	m_commandQueue.finish();
 }
 
-void CLTemporalPooler::write(const std::vector< cl_char >& activations_in, std::vector< cl_char >& results_out)
+void CLTemporalPooler::write(const std::vector< cl_char >& activations_in, bool learning, std::vector< cl_char >& results_out)
 {
 	if (activations_in.size() != std::size_t(m_topology.getColumns()))
 	{

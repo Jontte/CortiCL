@@ -28,12 +28,14 @@ void Sensor::compute_histogram()
 	assert(m_histogram.size() == effectiveSize);
 }
 
-std::vector<signed char> Sensor::encode(double value)
+std::vector<signed char> Sensor::encode(double value, bool learning)
 {
 	std::vector<signed char> ret(m_totalSize, 0);
 
 	if (m_histogram.empty() )
 	{
+		if (!learning)
+			return 0;
 		if (m_samples.size() < SAMPLE_WINDOW_SIZE)
 		{
 			m_samples.push_back(value);

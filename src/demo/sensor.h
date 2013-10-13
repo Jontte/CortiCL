@@ -20,7 +20,7 @@ private:
 public:
 
 	Sensor(int totalSize, int windowSize) : m_totalSize(totalSize), m_windowSize(windowSize){}
-	std::vector<signed char> encode(double value);
+	std::vector<signed char> encode(double value, bool learning = true);
 	double decode(const std::vector<double>& sdr);
 
 	const std::vector<double>& getHistogram() const

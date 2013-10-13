@@ -226,14 +226,16 @@ void demo2Loop(SDL_Window* window)
 
 	bool done = false;
 
-	int columns = 256;
-	int inputSize = 64;
+	int columns = 32*32;
+	int inputSize = 512;
 
-	int inhibitionRadius = 32;
-	int receptiveFieldRadius = 8;
-
+	int inhibitionRadius = 5;
+	int receptiveFieldRadius = 5;
 	CLArgs args;
-	args.ColumnProximalSynapseMinOverlap = 3;
+
+	args.ColumnProximalSynapseMinOverlap = 5;
+	args.ColumnProximalSynapseCount = 40;
+
 	CLRegion region(defaultDevice, context,
 		CLTopology::line(inputSize, columns, inhibitionRadius, receptiveFieldRadius),
 		args
@@ -247,41 +249,68 @@ void demo2Loop(SDL_Window* window)
 	std::vector<double> noisyRemap(inputSize);
 
 	double timer = 0;
-
-	Sensor sensor(inputSize, 8);
+	const double dt = 0.01;
+	Sensor sensor(inputSize, 32);
 
 	double timeMult = 3;
+	int iterCount = 0;
+
+	const int temporalPoolerThreshold = 10000;
+
+	const int windowSize = 100;
+	std::vector<double> predictions(0.05 * windowSize/dt, 0);
+	int windowPosition = 0;
+
+	auto predict = [&](double input, bool learning)
+	{
+		// Encode to SDR via an instance of the Sensor class
+		dataIn = sensor.encode(input, learning);
+
+		// Feed SDR to region, receive activation in dataOut
+		region.write(dataIn, dataOut, learning, iterCount++ > temporalPoolerThreshold);
+
+		// Find out what kind of input would cause this kind of region activation (noisy backwards convolution)
+		region.backwards(dataOut, noisyRemap);
+
+		// Use sensor to find out approximate input value that would cause this kind of SDR
+		return sensor.decode(noisyRemap);
+	};
 
 	while(!done)
 	{
-		timer += 0.01;
+		timer += dt;
 		checkEvents(&done);
 
 		SDL_GL_SwapWindow(window);
 		glClearColor ( 0.0, 0.0, 0.0, 1.0 );
 		glClear ( GL_COLOR_BUFFER_BIT );
 
+		glColor3d(1,0,0);
 		glBegin(GL_LINE_STRIP);
-		for(int i = 0; i < 100; ++i)
+		for(int i = 0; i < predictions.size(); ++i)
 		{
-			glVertex2d(-1+i/99.0, 0.2*sin(i/20.0+timer));
+			glVertex2d(-1+1.0-i/(predictions.size()-1.0), predictions[(i + windowPosition) % predictions.size()]);
+		}
+		glEnd();
+		glColor3d(1,1,1);
+		glBegin(GL_LINE_STRIP);
+		for(int i = 0; i < windowSize; ++i)
+		{
+			glVertex2d(-1+i/(windowSize-1.0), 0.2*sin(i/20.0+timer));
 		}
 		glEnd();
 
 		// Generate one double value
-		double input = 0.2*sin(99.0/20.0+timer);
+		double input = 0.2*sin((windowSize-1.0)/20.0+timer);
+		double output = predict(input, true);
 
-		// Encode to SDR via an instance of the Sensor class
-		dataIn = sensor.encode(input);
+		// Store output history for rendering
+		if (--windowPosition < 0)
+			windowPosition = predictions.size()-1;
 
-		// Feed SDR to region, receive activation in dataOut
-		region.write(dataIn, dataOut);
+		predictions[windowPosition] = output;
 
-		// Find out what kind of input would cause this kind of region activation (noisy backwards convolution)
-		region.backwards(dataOut, noisyRemap);
 
-		// Use sensor to find out approximate input value that would cause this kind of SDR
-		double output = sensor.decode(noisyRemap);
 
 		// Draw sensor-encoded data
 		glBegin(GL_QUADS);
@@ -333,6 +362,20 @@ void demo2Loop(SDL_Window* window)
 
 		if (!spaceDown)
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000/240));
+
+		//CLStats stats = region.getStats();
+		//std::cout << stats.averageBoost << " " << stats.averageDutyCycle << " " << stats.totalSegments << " " << stats.totalSynapses << std::endl;
+
+		// Let's predict further into the future!
+		glColor3d(1,0,0);
+		glBegin(GL_LINE_STRIP);
+		for(int i = 0; i < predictions.size(); i += 50)
+		{
+			double output = predict(output, false);
+			glVertex2d(double(i)/(predictions.size()-1.0), output);
+		}
+		glEnd();
+		glColor3d(1,1,1);
 	}
 }
 

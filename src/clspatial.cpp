@@ -92,7 +92,7 @@ CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::C
 
 	std::cerr << "CLSpatialPooler: Kernels loaded" << std::endl;
 }
-std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
+std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits, bool learning)
 {
 	if (bits.size() != std::size_t(m_topology.getInputSize()))
 	{
@@ -106,23 +106,26 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 		throw std::runtime_error(getCLError(err));
 
 	// Phase 1: Overlap
-	m_computeOverlapKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer, m_topology.getInputSize());
+	m_computeOverlapKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer, m_topology.getInputSize(), learning);
 	err = m_computeOverlapKernel.getError();
 	if (err != CL_SUCCESS)
 		throw std::runtime_error(getCLError(err));
 
 	// Phase 2: Inhibit neighbours
 	//  float sparsityTarget, int nWidth, int nHeight, int regionWidth, int regionHeight
-	m_inhibitNeighboursKernel(m_columnDataBuffer, m_synapseDataBuffer, 0.04f, m_topology.inhibitionRadius, m_topology.inhibitionRadius, m_topology.regionWidth, m_topology.regionHeight);
+	m_inhibitNeighboursKernel(m_columnDataBuffer, m_synapseDataBuffer, 0.04f, m_topology.inhibitionRadius, m_topology.inhibitionRadius, m_topology.regionWidth, m_topology.regionHeight, learning);
 	err = m_inhibitNeighboursKernel.getError();
 	if (err != CL_SUCCESS)
 		throw std::runtime_error(getCLError(err));
 
-	// Phase 3: Update permanences
-	m_updatePermanencesKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);
-	err = m_updatePermanencesKernel.getError();
-	if (err != CL_SUCCESS)
-		throw std::runtime_error(getCLError(err));
+	if (learning)
+	{
+		// Phase 3: Update permanences
+		m_updatePermanencesKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);
+		err = m_updatePermanencesKernel.getError();
+		if (err != CL_SUCCESS)
+			throw std::runtime_error(getCLError(err));
+	}
 
 	std::vector<cl_char> ret;
 	ret.reserve(m_topology.getColumns());

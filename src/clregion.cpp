@@ -9,15 +9,21 @@
 CLRegion::CLRegion(cl::Device& device, cl::Context& context, const CLTopology& topo, const CLArgs& args)
   : m_commandQueue(context, device)
   , m_spatialPooler(device, context, m_commandQueue, topo, args)
-//   , m_temporalPooler(device, context, m_commandQueue, topo, args)
+   , m_temporalPooler(device, context, m_commandQueue, topo, args)
 {
 	std::cerr << "Device memory allocation limit: " << device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>() << std::endl;
 };
-void CLRegion::write(std::vector<cl_char>& activations, std::vector<cl_char>& results)
+void CLRegion::write(std::vector< cl_char >& activations, std::vector< cl_char >& results, bool learning, bool temporal)
 {
-	std::vector<cl_char> activeColumns = m_spatialPooler.write(activations);
-	results = activeColumns; return;
-// 	m_temporalPooler.write(activeColumns, results);
+	std::vector<cl_char> activeColumns = m_spatialPooler.write(activations, learning);
+
+	if (!temporal)
+	{
+		results = activeColumns;
+		return;
+	}
+
+	m_temporalPooler.write(activeColumns, learning, results);
 }
 void CLRegion::backwards(const std::vector< cl_char >& columnActivation, std::vector< double >& result)
 {
@@ -28,7 +34,7 @@ CLStats CLRegion::getStats()
 {
 	CLStats stats;
 	m_spatialPooler.getStats(stats);
-// 	m_temporalPooler.getStats(stats);
+ 	m_temporalPooler.getStats(stats);
 	return stats;
 }
 

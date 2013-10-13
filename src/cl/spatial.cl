@@ -16,7 +16,11 @@ typedef struct
 	float overlapDutyCycle;
 } Column;
 
-void kernel computeOverlap(global Column* columns, global Synapse* synapses, global const char* input, int inputSize)
+void kernel computeOverlap(
+	global Column* columns,
+	global Synapse* synapses,
+	global const char* input,
+	int inputSize)
 {
 	int index = get_global_id(0);
 
@@ -133,7 +137,10 @@ void kernel inhibitNeighbours(
 }
 
 
-void kernel updatePermanences(global Column* columns, global Synapse* synapses, global const char* input)
+void kernel updatePermanences(
+	global Column* columns,
+	global Synapse* synapses,
+	global const char* input)
 {
 	int index = get_global_id(0);
 
@@ -164,7 +171,9 @@ void kernel updatePermanences(global Column* columns, global Synapse* synapses, 
 	// Update duty cycles
 
 	col->minDutyCycle = 0.01 * 0.1; // maxDutyCycle of neighbourhood
-	col->activeDutyCycle = col->activeDutyCycle * DUTY_CYCLE_PERSISTENCE + col->active * (1.0 - DUTY_CYCLE_PERSISTENCE);
+	col->activeDutyCycle =
+		col->activeDutyCycle * DUTY_CYCLE_PERSISTENCE
+		+ col->active * (1.0 - DUTY_CYCLE_PERSISTENCE);
 
 	if (col->activeDutyCycle <= col->minDutyCycle)
 		col->boost += BOOST_STEP;
