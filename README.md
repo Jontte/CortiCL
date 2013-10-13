@@ -12,7 +12,7 @@ The main platform is 64-bit Linux, but it might run elsewhere too. To build:
 	make
 	./cldemo
 
-The demo at the moment is a minimal visualization of the Region activation given a somewhat random spatio-temporal pattern seen on the left. More demos are planned.
+Note that SDL2 and OpenCL development libraries are required.
 
 Use of the algorithm
 -
