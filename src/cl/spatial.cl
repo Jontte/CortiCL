@@ -132,10 +132,8 @@ void kernel inhibitNeighbours(
 		k += bestActCount;
 		activationSkip = bestActivation;
 	}
-
 	col->active = col->overlap >= activationSkip;
 }
-
 
 void kernel updatePermanences(
 	global Column* columns,

@@ -15,14 +15,16 @@ CLRegion::CLRegion(cl::Device& device, cl::Context& context, const CLTopology& t
 };
 void CLRegion::write(std::vector< cl_char >& activations, std::vector< cl_char >& results, bool temporal)
 {
-	std::vector<cl_char> activeColumns = m_spatialPooler.write(activations);
+	// 1. Feed given input bit pattern first to the spatial pooler
+	// 2. Obtain column activations
+	// 3. Feed columns to temporal pooler
 
+	std::vector<cl_char> activeColumns = m_spatialPooler.write(activations);
 	if (!temporal)
 	{
 		results = activeColumns;
 		return;
 	}
-
 	m_temporalPooler.write(activeColumns, results);
 }
 void CLRegion::backwards(const std::vector< cl_char >& columnActivation, std::vector< double >& result)
@@ -40,7 +42,8 @@ CLStats CLRegion::getStats()
 
 std::string getCLError(cl_int err)
 {
-	switch (err) {
+	switch (err)
+	{
 		case CL_SUCCESS:                            return "Success!";
 		case CL_DEVICE_NOT_FOUND:                   return "Device not found.";
 		case CL_DEVICE_NOT_AVAILABLE:               return "Device not available";

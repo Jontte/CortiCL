@@ -3,6 +3,8 @@
 
 std::string CLArgs::serialize() const
 {
+	// Write constants to a single source line. This way any line numbers reported by the OpenCL compiler will still be valid.
+
 	std::stringstream constants; constants
 	<< "constant int COLUMN_PROXIMAL_SYNAPSE_COUNT = "       << ColumnProximalSynapseCount      << ";"
 	<< "constant int COLUMN_PROXIMAL_SYNAPSE_MIN_OVERLAP = " << ColumnProximalSynapseMinOverlap << ";"

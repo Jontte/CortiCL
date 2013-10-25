@@ -48,6 +48,7 @@ public:
 	// Noisy backwards convolution: Find out what kind of bit pattern would cause the given column activation
 	void backwards(const std::vector<cl_char>& columnActivation, std::vector<double>& result);
 
+	// Read statistics from network. This can be very expensive as the full network has to be downloaded from the computing device.
 	CLStats getStats();
 };
 

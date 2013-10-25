@@ -252,7 +252,6 @@ void demo2Loop(SDL_Window* window)
 	const double dt = 0.01;
 	Sensor sensor(inputSize, 32);
 
-	double timeMult = 3;
 	int iterCount = 0;
 
 	const int temporalPoolerThreshold = 10000;
@@ -287,7 +286,7 @@ void demo2Loop(SDL_Window* window)
 
 		glColor3d(1,0,0);
 		glBegin(GL_LINE_STRIP);
-		for(int i = 0; i < predictions.size(); ++i)
+		for(int i = 0; i < int(predictions.size()); ++i)
 		{
 			glVertex2d(-1+1.0-i/(predictions.size()-1.0), predictions[(i + windowPosition) % predictions.size()]);
 		}
@@ -309,8 +308,6 @@ void demo2Loop(SDL_Window* window)
 			windowPosition = predictions.size()-1;
 
 		predictions[windowPosition] = output;
-
-
 
 		// Draw sensor-encoded data
 		glBegin(GL_QUADS);
@@ -365,17 +362,6 @@ void demo2Loop(SDL_Window* window)
 
 		//CLStats stats = region.getStats();
 		//std::cout << stats.averageBoost << " " << stats.averageDutyCycle << " " << stats.totalSegments << " " << stats.totalSynapses << std::endl;
-
-		// Let's predict further into the future!
-		glColor3d(1,0,0);
-		glBegin(GL_LINE_STRIP);
-		for(int i = 0; i < predictions.size(); i += 50)
-		{
-			double output = predict(output, false);
-			glVertex2d(double(i)/(predictions.size()-1.0), output);
-		}
-		glEnd();
-		glColor3d(1,1,1);
 	}
 }
 

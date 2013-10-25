@@ -98,6 +98,7 @@ void CLTemporalPooler::write(const std::vector< cl_char >& activations_in, std::
 
 	cl_int err;
 
+	// Send input column activations to device
 	err = m_commandQueue.enqueueWriteBuffer(m_inputDataBuffer, CL_FALSE, 0, m_topology.getColumns() * sizeof(cl_char), &activations_in[0]);
 	if (err != CL_SUCCESS)
 		throw std::runtime_error(getCLError(err));
@@ -130,6 +131,7 @@ void CLTemporalPooler::write(const std::vector< cl_char >& activations_in, std::
 	if (err != CL_SUCCESS)
 		throw std::runtime_error("updateSynapsesKernel: " + getCLError(err));
 
+	// Obtain result from compute device and save to results_out
 	results_out.resize(m_topology.getColumns());
 	m_commandQueue.enqueueReadBuffer(m_inputDataBuffer, CL_TRUE, 0, sizeof(cl_char) * m_topology.getColumns(), &results_out[0]);
 }
@@ -143,7 +145,7 @@ void CLTemporalPooler::getStats(CLStats& stats)
 	stats.totalSegments = 0;
 	stats.totalSynapses = 0;
 
-	for (int i = 0; i < m_cellData.size(); ++i)
+	for (int i = 0; i < int(m_cellData.size()); ++i)
 	{
 		CLCell& cell = m_cellData[i];
 		stats.totalSegments += cell.segmentCount;

@@ -101,6 +101,7 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 
 	cl_int err;
 
+	// Send given input pattern to compute device
 	err = m_commandQueue.enqueueWriteBuffer(m_inputDataBuffer, CL_FALSE, 0, m_topology.getInputSize() * sizeof(cl_char), &bits[0]);
 	if (err != CL_SUCCESS)
 		throw std::runtime_error(getCLError(err));
@@ -124,13 +125,13 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 	if (err != CL_SUCCESS)
 		throw std::runtime_error(getCLError(err));
 
+	// Download list of active columns from the compute device
 	std::vector<cl_char> ret;
 	ret.reserve(m_topology.getColumns());
 	m_commandQueue.enqueueReadBuffer(m_columnDataBuffer, CL_TRUE, 0, sizeof(CLColumn) * m_columnData.size(), &m_columnData[0]);
 
 	for (CLColumn& col: m_columnData)
 		ret.push_back(col.active);
-
 	return ret;
 }
 void CLSpatialPooler::getStats(CLStats& stats)
