@@ -8,22 +8,40 @@ find_package(SDL2 REQUIRED)
 
 include_directories(${SDL2_INCLUDE_DIRS})
 include_directories(${OPENCL_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${SDL2_LIBRARIES} ${OPENCL_LIBRARIES})
+include_directories(${PROJECT_BINARY_DIR})
 
-#find_package(OpenMP)
-#if (OPENMP_FOUND)
-#	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-#	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-#endif()
+set(LIBS ${LIBS} ${SDL2_LIBRARIES} ${OPENCL_LIBRARIES})
 
 add_definitions(-std=c++11 -DLINUX -Wno-deprecated-declarations)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wshadow -g -pthread")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas")
 
-add_executable(cldemo src/demo/cldemo.cpp src/demo/sensor.cpp src/clregion.cpp src/clspatial.cpp src/cltemporal.cpp src/clargs.cpp)
+add_custom_command(
+	PRE_BUILD
+	OUTPUT ${PROJECT_BINARY_DIR}/spatial.cl.h
+	COMMAND ${CMAKE_COMMAND} -D SOURCE=${PROJECT_SOURCE_DIR}/src/cl/spatial.cl -D DESTINATION=${PROJECT_BINARY_DIR}/spatial.cl.h -P ${CMAKE_SOURCE_DIR}/cmake/stringify.cmake
+	DEPENDS ${PROJECT_SOURCE_DIR}/src/cl/spatial.cl
+)
 
-target_link_libraries(cldemo SDL2 GL ${OPENCL_LIBRARIES})
+add_custom_command(
+	PRE_BUILD
+	OUTPUT ${PROJECT_BINARY_DIR}/temporal.cl.h
+	COMMAND ${CMAKE_COMMAND} -D SOURCE=${PROJECT_SOURCE_DIR}/src/cl/temporal.cl -D DESTINATION=${PROJECT_BINARY_DIR}/temporal.cl.h -P ${CMAKE_SOURCE_DIR}/cmake/stringify.cmake
+	DEPENDS ${PROJECT_SOURCE_DIR}/src/cl/temporal.cl
+)
 
-file(COPY ${PROJECT_SOURCE_DIR}/src/cl/spatial.cl DESTINATION cl)
-file(COPY ${PROJECT_SOURCE_DIR}/src/cl/temporal.cl DESTINATION cl)
+add_library(corticl STATIC
+	src/clregion.cpp
+	src/clspatial.cpp
+	src/cltemporal.cpp
+	src/clargs.cpp
+	${PROJECT_BINARY_DIR}/spatial.cl.h
+	${PROJECT_BINARY_DIR}/temporal.cl.h
+)
+
+add_executable(cldemo
+	src/demo/cldemo.cpp
+	src/demo/sensor.cpp)
+
+target_link_libraries(cldemo corticl SDL2 GL ${OPENCL_LIBRARIES})

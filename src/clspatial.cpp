@@ -7,6 +7,10 @@
 
 #include "clregion.h"
 
+constexpr static const char* SPATIAL_SRC =
+#include "spatial.cl.h"
+;
+
 CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::CommandQueue& queue, const CLTopology& topo, const CLArgs& args)
 	: m_device(device)
 	, m_context(context)
@@ -20,12 +24,11 @@ CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::C
 	std::cerr << "CLSpatialPooler: Initializing" << std::endl;
 
 	// Install kernel programs
-	std::ifstream fin("cl/spatial.cl");
 	std::string definitions = args.serialize();
-	std::string source = std::string{std::istreambuf_iterator<char>(fin),std::istreambuf_iterator<char>()};
+
 	cl::Program::Sources sources;
 	sources.push_back({definitions.c_str(), definitions.length()});
-	sources.push_back({source.c_str(), source.length()});
+	sources.push_back({SPATIAL_SRC, strlen(SPATIAL_SRC)});
 
 	cl::Program program(context, sources);
 	if (program.build({device}) != CL_SUCCESS)

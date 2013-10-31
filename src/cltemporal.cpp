@@ -8,6 +8,10 @@
 
 #include "clregion.h"
 
+constexpr static const char* TEMPORAL_SRC =
+#include "temporal.cl.h"
+;
+
 CLTemporalPooler::CLTemporalPooler(cl::Device& device, cl::Context& context, cl::CommandQueue& queue, const CLTopology& topo, const CLArgs& args)
 	: m_device(device)
 	, m_context(context)
@@ -22,10 +26,11 @@ CLTemporalPooler::CLTemporalPooler(cl::Device& device, cl::Context& context, cl:
 	std::cerr << "CLTemporalPooler: Initializing" << std::endl;
 
 	// Install kernel programs
-	std::ifstream fin("cl/temporal.cl");
-	std::string source = args.serialize() + std::string{std::istreambuf_iterator<char>(fin),std::istreambuf_iterator<char>()};
+	std::string definitions = args.serialize();
+
 	cl::Program::Sources sources;
-	sources.push_back({source.c_str(), source.length()});
+	sources.push_back({definitions.c_str(), definitions.length()});
+	sources.push_back({TEMPORAL_SRC, strlen(TEMPORAL_SRC)});
 
 	cl::Program program(context, sources);
 	if (program.build({device}) != CL_SUCCESS)
