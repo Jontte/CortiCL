@@ -10,6 +10,7 @@ std::string CLArgs::serialize() const
 	<< "constant int COLUMN_PROXIMAL_SYNAPSE_MIN_OVERLAP = " << ColumnProximalSynapseMinOverlap << ";"
 	<< "constant float BOOST_STEP = "                        << BoostStep                       << ";"
 	<< "constant float DUTY_CYCLE_PERSISTENCE = "            << DutyCyclePersistence            << ";"
+	<< "constant float SPARSITY_TARGET = "                   << SparsityTarget                  << ";"
 	<< "constant int COLUMN_CELL_COUNT = "                   << ColumnCellCount                 << ";"
 	<< "constant int CELL_MAX_SEGMENTS = "                   << CellMaxSegments                 << ";"
 	<< "constant int SEGMENT_MAX_SYNAPSES = "                << SegmentMaxSynapses              << ";"

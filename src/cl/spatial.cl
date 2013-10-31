@@ -54,7 +54,6 @@ void kernel computeOverlap(
 void kernel inhibitNeighbours(
 	global Column* columns,
 	global Synapse* synapses,
-	float sparsityTarget,
 	int nWidth,
 	int nHeight,
 	int regionWidth,
@@ -67,7 +66,7 @@ void kernel inhibitNeighbours(
 		return;
 
 	// Given neighbourhood of nWidth*nHeight and total region topology of regionWidth*regionHeight,
-	// inhibit current column so that the neighbourhood has approximately sparsityTarget ratio of columns active
+	// inhibit current column so that the neighbourhood has approximately SPARSITY_TARGET ratio of columns active
 
 	int colX = index % regionWidth;
 	int colY = index / regionWidth;
@@ -96,7 +95,7 @@ void kernel inhibitNeighbours(
 	int numActiveColumns = 0;
 
 	int neighbours = (maxX-minX+1)*(maxY-minY+1);
-	int n = sparsityTarget * neighbours;
+	int n = SPARSITY_TARGET * neighbours;
 
 	// Use partial selection sort to find the Nth activation
 	float activationSkip = -1;

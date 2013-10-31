@@ -13,6 +13,7 @@ struct CLArgs
 	int ColumnProximalSynapseMinOverlap = 7;
 	float BoostStep = 0.01;
 	float DutyCyclePersistence = 0.99;
+	float SparsityTarget = 0.04; // Percentage
 
 	// Temporal pooler:
 	int ColumnCellCount = 4;
