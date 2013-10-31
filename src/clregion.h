@@ -5,14 +5,13 @@
 #include <string>
 #include <memory>
 #include <map>
-#include <CL/cl.hpp>
-
-std::string getCLError(cl_int err);
 
 #include "clspatial.h"
 #include "cltemporal.h"
 #include "cltopology.h"
 #include "clargs.h"
+
+std::string getCLError(cl_int err);
 
 struct CLStats
 {

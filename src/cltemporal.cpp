@@ -33,10 +33,14 @@ CLTemporalPooler::CLTemporalPooler(cl::Device& device, cl::Context& context, cl:
 	sources.push_back({TEMPORAL_SRC, strlen(TEMPORAL_SRC)});
 
 	cl::Program program(context, sources);
-	if (program.build({device}) != CL_SUCCESS)
+	try
+	{
+		program.build({device});
+	}
+	catch(const cl::Error& err)
 	{
 		std::cerr << "Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
-		throw std::runtime_error("Error compiling OpenCL source!");
+		throw;
 	}
 
 	m_timeStepKernel = cl::KernelFunctor(cl::Kernel(program, "timeStep"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
@@ -86,11 +90,11 @@ void CLTemporalPooler::pullBuffers(bool cells, bool segments, bool synapses)
 void CLTemporalPooler::pushBuffers(bool cells, bool segments, bool synapses)
 {
 	if (cells)
-		m_commandQueue.enqueueWriteBuffer(m_cellDataBuffer, CL_FALSE, 0, m_cellData.size() * sizeof(CLCell), &m_cellData[0]);
+		m_commandQueue.enqueueWriteBuffer(m_cellDataBuffer, CL_FALSE, 0, sizeof(CLCell) * m_cellData.size(), &m_cellData[0]);
 	if (segments)
-		m_commandQueue.enqueueWriteBuffer(m_segmentDataBuffer, CL_FALSE, 0, m_segmentData.size() * sizeof(CLSegment), &m_segmentData[0]);
+		m_commandQueue.enqueueWriteBuffer(m_segmentDataBuffer, CL_FALSE, 0, sizeof(CLSegment) * m_segmentData.size(), &m_segmentData[0]);
 	if (synapses)
-		m_commandQueue.enqueueWriteBuffer(m_synapseDataBuffer, CL_FALSE, 0, m_synapseData.size() * sizeof(CLSynapse), &m_synapseData[0]);
+		m_commandQueue.enqueueWriteBuffer(m_synapseDataBuffer, CL_FALSE, 0, sizeof(CLSynapse) * m_synapseData.size() , &m_synapseData[0]);
 	m_commandQueue.finish();
 }
 
@@ -101,42 +105,27 @@ void CLTemporalPooler::write(const std::vector< cl_char >& activations_in, std::
 		throw std::runtime_error("Invalid vector length!");
 	}
 
-	cl_int err;
-
 	// Send input column activations to device
-	err = m_commandQueue.enqueueWriteBuffer(m_inputDataBuffer, CL_FALSE, 0, m_topology.getColumns() * sizeof(cl_char), &activations_in[0]);
-	if (err != CL_SUCCESS)
-		throw std::runtime_error(getCLError(err));
+	m_commandQueue.enqueueWriteBuffer(m_inputDataBuffer, CL_TRUE, 0, m_topology.getColumns() * sizeof(cl_char), &activations_in[0]);
 
-	cl_uint2 randomSeed; // provide gpu some poor man's randomness
+	// provide GPU some poor man's randomness
+	cl_uint2 randomSeed;
 	randomSeed.s[0] = rand();
 	randomSeed.s[1] = rand();
 
 	// Phase 0: Step forwards in time
 	m_timeStepKernel(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer);
-	err = m_timeStepKernel.getError();
-	if (err != CL_SUCCESS)
-		throw std::runtime_error("timeStepKernel: " + getCLError(err));
 
 	// Phase 1: Compute active state for each cell
 	m_computeActiveStateKernel(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer, m_inputDataBuffer, randomSeed);
-	err = m_computeActiveStateKernel.getError();
-	if (err != CL_SUCCESS)
-		throw std::runtime_error("computeActiveStateKernel: " + getCLError(err));
 
 	// Phase 2: Compute predictive state for each cell
 	m_computePredictiveState(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer, m_inputDataBuffer, randomSeed);
-	err = m_computePredictiveState.getError();
-	if (err != CL_SUCCESS)
-		throw std::runtime_error("computePredictiveStateKernel: " + getCLError(err));
 
 	// Phase 3: Update permanences
 	m_updateSynapsesKernel(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);
-	err = m_updateSynapsesKernel.getError();
-	if (err != CL_SUCCESS)
-		throw std::runtime_error("updateSynapsesKernel: " + getCLError(err));
 
-	// Obtain result from compute device and save to results_out
+	// Obtain result (list of column activity) from compute device and save to results_out
 	results_out.resize(m_topology.getColumns());
 	m_commandQueue.enqueueReadBuffer(m_inputDataBuffer, CL_TRUE, 0, sizeof(cl_char) * m_topology.getColumns(), &results_out[0]);
 }

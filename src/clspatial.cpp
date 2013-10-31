@@ -31,10 +31,14 @@ CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::C
 	sources.push_back({SPATIAL_SRC, strlen(SPATIAL_SRC)});
 
 	cl::Program program(context, sources);
-	if (program.build({device}) != CL_SUCCESS)
+	try
+	{
+		program.build({device});
+	}
+	catch(const cl::Error& err)
 	{
 		std::cerr << "Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
-		throw std::runtime_error("Error compiling OpenCL source!");
+		throw;
 	}
 
 	m_computeOverlapKernel = cl::KernelFunctor(cl::Kernel(program, "computeOverlap"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
@@ -102,37 +106,24 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 		throw std::runtime_error("Invalid vector length!");
 	}
 
-	cl_int err;
-
 	// Send given input pattern to compute device
-	err = m_commandQueue.enqueueWriteBuffer(m_inputDataBuffer, CL_FALSE, 0, m_topology.getInputSize() * sizeof(cl_char), &bits[0]);
-	if (err != CL_SUCCESS)
-		throw std::runtime_error(getCLError(err));
+	m_commandQueue.enqueueWriteBuffer(m_inputDataBuffer, CL_FALSE, 0, m_topology.getInputSize() * sizeof(cl_char), &bits[0]);
 
 	// Phase 1: Overlap
 	m_computeOverlapKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer, m_topology.getInputSize());
-	err = m_computeOverlapKernel.getError();
-	if (err != CL_SUCCESS)
-		throw std::runtime_error(getCLError(err));
 
 	// Phase 2: Inhibit neighbours
-	//  float sparsityTarget, int nWidth, int nHeight, int regionWidth, int regionHeight
-	m_inhibitNeighboursKernel(m_columnDataBuffer, m_synapseDataBuffer, 0.04f, m_topology.inhibitionRadius, m_topology.inhibitionRadius, m_topology.regionWidth, m_topology.regionHeight);
-	err = m_inhibitNeighboursKernel.getError();
-	if (err != CL_SUCCESS)
-		throw std::runtime_error(getCLError(err));
+	//                                                                 int nWidth,                  int nHeight,                 int regionWidth,        int regionHeight
+	m_inhibitNeighboursKernel(m_columnDataBuffer, m_synapseDataBuffer, m_topology.inhibitionRadius, m_topology.inhibitionRadius, m_topology.regionWidth, m_topology.regionHeight);
 
 	// Phase 3: Update permanences
 	m_updatePermanencesKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);
-	err = m_updatePermanencesKernel.getError();
-	if (err != CL_SUCCESS)
-		throw std::runtime_error(getCLError(err));
 
 	// Download list of active columns from the compute device
-	std::vector<cl_char> ret;
-	ret.reserve(m_topology.getColumns());
 	m_commandQueue.enqueueReadBuffer(m_columnDataBuffer, CL_TRUE, 0, sizeof(CLColumn) * m_columnData.size(), &m_columnData[0]);
 
+	std::vector<cl_char> ret;
+	ret.reserve(m_topology.getColumns());
 	for (CLColumn& col: m_columnData)
 		ret.push_back(col.active);
 	return ret;

@@ -1,6 +1,7 @@
 #ifndef CLTEMPORAL_H_INCLUDED
 #define CLTEMPORAL_H_INCLUDED
 
+#define __CL_ENABLE_EXCEPTIONS
 #include <string>
 #include <CL/cl.hpp>
 #include "cltopology.h"
