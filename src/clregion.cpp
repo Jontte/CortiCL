@@ -9,7 +9,7 @@
 CLRegion::CLRegion(cl::Device& device, cl::Context& context, const CLTopology& topo, const CLArgs& args)
   : m_commandQueue(context, device)
   , m_spatialPooler(device, context, m_commandQueue, topo, args)
-   , m_temporalPooler(device, context, m_commandQueue, topo, args)
+  , m_temporalPooler(device, context, m_commandQueue, topo, args)
 {
 	std::cerr << "Device memory allocation limit: " << device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>() << std::endl;
 };

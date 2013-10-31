@@ -260,10 +260,10 @@ void demo2Loop(SDL_Window* window)
 	std::vector<double> predictions(0.05 * windowSize/dt, 0);
 	int windowPosition = 0;
 
-	auto predict = [&](double input, bool learning)
+	auto predict = [&](double input, bool /*learning*/)
 	{
 		// Encode to SDR via an instance of the Sensor class
-		dataIn = sensor.encode(input, learning);
+		dataIn = sensor.encode(input);
 
 		// Feed SDR to region, receive activation in dataOut
 		region.write(dataIn, dataOut, iterCount++ > temporalPoolerThreshold);

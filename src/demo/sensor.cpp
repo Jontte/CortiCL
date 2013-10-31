@@ -28,7 +28,7 @@ void Sensor::compute_histogram()
 	assert(m_histogram.size() == effectiveSize);
 }
 
-std::vector<signed char> Sensor::encode(double value, bool learning)
+std::vector<signed char> Sensor::encode(double value)
 {
 	std::vector<signed char> ret(m_totalSize, 0);
 
@@ -67,7 +67,7 @@ double Sensor::decode(const std::vector<double>& sdr)
 	double highestOverlap = -1;
 	int highestOverlapIndex = -1;
 
-	for (int i = 0; i+m_windowSize < sdr.size(); ++i)
+	for (int i = 0; i+m_windowSize < int(sdr.size()); ++i)
 	{
 		double overlap = 0;
 		for (int a = 0 ; a < m_windowSize; ++a)

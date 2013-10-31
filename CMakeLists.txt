@@ -12,9 +12,7 @@ include_directories(${PROJECT_BINARY_DIR})
 
 set(LIBS ${LIBS} ${SDL2_LIBRARIES} ${OPENCL_LIBRARIES})
 
-add_definitions(-std=c++11 -DLINUX -Wno-deprecated-declarations)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wshadow -g -pthread")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wshadow -Wno-deprecated-declarations -g -pthread -std=c++11")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas")
 
 add_custom_command(

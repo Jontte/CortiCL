@@ -93,7 +93,7 @@ uint random(uint2 seedValue)
 	return seedValue.y ^ (seedValue.y >> 19) ^ (t ^ (t >> 8));
 }
 
-bool segmentActivity(global Segment* segment, TimeStep when, CellState state)
+inline bool segmentActivity(global Segment* segment, TimeStep when, CellState state)
 {
 	if (state == ACTIVESTATE)
 		return segment->activity[0][when];
@@ -101,7 +101,7 @@ bool segmentActivity(global Segment* segment, TimeStep when, CellState state)
 		return segment->activity[1][when];
 	return 0;
 }
-bool segmentActive(global Segment* segment, TimeStep when, CellState state)
+inline bool segmentActive(global Segment* segment, TimeStep when, CellState state)
 {
 	return segmentActivity(segment, when, state) > SEGMENT_ACTIVATION_THRESHOLD;
 }

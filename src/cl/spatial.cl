@@ -143,9 +143,10 @@ void kernel updatePermanences(
 
 	global Column* col = &columns[index];
 	int columnSynapseOffset = index * COLUMN_PROXIMAL_SYNAPSE_COUNT;
-	// Update permanences
+
 	if (col->active)
 	{
+		// Update permanences
 		for (int i = 0; i < COLUMN_PROXIMAL_SYNAPSE_COUNT; ++i)
 		{
 			global Synapse* syn = &synapses[columnSynapseOffset + i];
@@ -166,8 +167,7 @@ void kernel updatePermanences(
 	}
 
 	// Update duty cycles
-
-	col->minDutyCycle = 0.01 * 0.1; // maxDutyCycle of neighbourhood
+	col->minDutyCycle = 0.01 * 0.1; // 0.1 = maxDutyCycle of neighbourhood
 	col->activeDutyCycle =
 		col->activeDutyCycle * DUTY_CYCLE_PERSISTENCE
 		+ col->active * (1.0 - DUTY_CYCLE_PERSISTENCE);
