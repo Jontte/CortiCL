@@ -16,11 +16,87 @@ typedef struct
 	float overlapDutyCycle;
 } Column;
 
+uint random(uint2* seedValue)
+{
+	uint seed = (seedValue->x++) + get_global_id(0);
+	uint t = seed ^ (seed << 11);
+	return seedValue->y ^ (seedValue->y >> 19) ^ (t ^ (t >> 8));
+}
+float randfloat(uint2* seedValue)
+{
+	uint i = random(seedValue) % 1000;
+	return i / 1000.0;
+}
+
+void resetSynapse(global Synapse* synapse, int columnIndex, uint2* randomState)
+{
+	// Calculate a pseudorandom permanence value centered at CONNECTED_PERMANENCE
+	float permanence = 0;
+	permanence += randfloat(randomState);
+	permanence -= randfloat(randomState);
+	permanence *= 0.5;
+	permanence += CONNECTED_PERMANENCE;
+	if (permanence < 0.0)
+		permanence = 0.0;
+	if (permanence > 1.0)
+		permanence = 1.0;
+	synapse -> permanence = permanence;
+	
+	// Calculate pseudorandom target bit based on receptive field radius
+	int columnX = columnIndex % REGION_WIDTH;
+	int columnY = columnIndex / REGION_WIDTH;
+
+	// Map column location in region to input space
+	int iX = INPUT_WIDTH  * ((float)columnX) / REGION_WIDTH;
+	int iY = INPUT_HEIGHT * ((float)columnY) / REGION_HEIGHT;
+	
+	int minX = 0; 
+	int minY = 0;
+	int maxX = INPUT_WIDTH;
+	int maxY = INPUT_HEIGHT;
+	
+	if (RECEPTIVE_FIELD_RADIUS >= 0)
+	{
+		minX = max(0, iX - RECEPTIVE_FIELD_RADIUS);
+		minY = max(0, iY - RECEPTIVE_FIELD_RADIUS);
+		maxX = min(INPUT_WIDTH,  iX + RECEPTIVE_FIELD_RADIUS);
+		maxY = min(INPUT_HEIGHT, iY + RECEPTIVE_FIELD_RADIUS);
+	}
+	
+	int x = minX + random(randomState) % (maxX-minX+1);
+	int y = minY + random(randomState) % (maxY-minY+1);
+	synapse -> target = x + y * INPUT_WIDTH;
+}
+
+void kernel initRegion(
+	global Column* columns,
+	global Synapse* synapses,
+	uint2 randomState)
+{
+	int columnIndex = get_global_id(0);
+	global Column* column = &columns[columnIndex];
+	uint2 state = randomState;
+	
+	// Column startup parameters
+	column -> boost = 0.0;
+	column -> overlap = 0.0;
+	column -> active = false;
+	column -> activeDutyCycle = 0.1;
+	column -> minDutyCycle = 0.1;
+	column -> overlapDutyCycle = 0.1;
+	
+	int synapseOffset = columnIndex * COLUMN_PROXIMAL_SYNAPSE_COUNT;
+	for (int i = 0; i < COLUMN_PROXIMAL_SYNAPSE_COUNT; ++i)
+	{
+		global Synapse* synapse = &synapses[i + synapseOffset];	
+		resetSynapse(synapse, columnIndex, &state);
+	}
+}
+
 void kernel computeOverlap(
 	global Column* columns,
 	global Synapse* synapses,
-	global const char* input,
-	int inputSize)
+	global const char* input)
 {
 	int index = get_global_id(0);
 

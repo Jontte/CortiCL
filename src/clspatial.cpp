@@ -51,51 +51,21 @@ CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::C
 
 	std::random_device dev;
 	std::mt19937 gen(dev());
-
-	int synapseIdx = 0;
-
-	for (std::size_t a = 0; a < m_columnData.size(); ++a)
-	{
-		CLColumn& col = m_columnData[a];
-		col.boost = 1.0;
-		col.overlap = 0;
-		col.active = false;
-		col.activeDutyCycle = 0.1;
-		col.minDutyCycle = 0.1;
-		col.overlapDutyCycle = 0.1;
-
-		for (int i = 0; i < m_args.ColumnProximalSynapseCount; ++i)
-		{
-			CLSynapse& syn = m_synapseData[i + synapseIdx];
-			syn.permanence = std::normal_distribution<>(0.2, 0.2)(gen);
-			if (syn.permanence < 0) syn.permanence = 0;
-			if (syn.permanence > 1) syn.permanence = 1;
-
-			if (topo.receptiveFieldRadius < 0)
-				syn.target = std::uniform_int_distribution<>(0, m_topology.getInputSize()-1)(gen);
-			else
-			{
-				// Map column xy to input space xy
-				int ix = std::floor(m_topology.inputWidth * (float(a % m_topology.regionWidth)/m_topology.regionWidth));
-				int iy = std::floor(m_topology.inputHeight * (float(a / m_topology.regionWidth)/m_topology.regionHeight));
-
-				int minx = std::max(0,               ix - topo.receptiveFieldRadius);
-				int maxx = std::min(topo.inputWidth, ix + topo.receptiveFieldRadius);
-				int miny = std::max(0,                iy - topo.receptiveFieldRadius);
-				int maxy = std::min(topo.inputHeight, iy + topo.receptiveFieldRadius);
-
-				int rx = std::uniform_int_distribution<>(minx, maxx-1)(gen);
-				int ry = std::uniform_int_distribution<>(miny, maxy-1)(gen);
-
-				syn.target = rx + ry*topo.inputWidth;
-			}
-		}
-		synapseIdx += m_args.ColumnProximalSynapseCount;
-	}
+	
+	// Initialize region
+	
+	cl::KernelFunctor initRegion = 
+		cl::KernelFunctor(cl::Kernel(program, "initRegion"), m_commandQueue, 
+		cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
+	
+	cl_uint2 randomState;
+	randomState.s[0] = rand();
+	randomState.s[1] = rand();
+	initRegion(m_columnDataBuffer, m_synapseDataBuffer, randomState);
 
 	// Upload columns to GPU
-	m_commandQueue.enqueueWriteBuffer(m_columnDataBuffer, CL_TRUE, 0, sizeof(CLColumn) * m_columnData.size(), &m_columnData[0]);
-	m_commandQueue.enqueueWriteBuffer(m_synapseDataBuffer, CL_TRUE, 0, sizeof(CLSynapse) * m_synapseData.size(), &m_synapseData[0]);
+// 	m_commandQueue.enqueueWriteBuffer(m_columnDataBuffer, CL_TRUE, 0, sizeof(CLColumn) * m_columnData.size(), &m_columnData[0]);
+// 	m_commandQueue.enqueueWriteBuffer(m_synapseDataBuffer, CL_TRUE, 0, sizeof(CLSynapse) * m_synapseData.size(), &m_synapseData[0]);
 
 	std::cerr << "CLSpatialPooler: Kernels loaded" << std::endl;
 }
@@ -110,7 +80,7 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 	m_commandQueue.enqueueWriteBuffer(m_inputDataBuffer, CL_FALSE, 0, m_topology.getInputSize() * sizeof(cl_char), &bits[0]);
 
 	// Phase 1: Overlap
-	m_computeOverlapKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer, m_topology.getInputSize());
+	m_computeOverlapKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);
 
 	// Phase 2: Inhibit neighbours
 	m_inhibitNeighboursKernel(m_columnDataBuffer, m_synapseDataBuffer);
