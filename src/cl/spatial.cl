@@ -93,19 +93,44 @@ void kernel initRegion(
 	}
 }
 
+// Reset the worst synapse of each column
+void kernel refineRegion(
+	global Column* columns,
+	global Synapse* synapses,
+	uint2 randomState)
+{
+	int columnIndex = get_global_id(0);
+	global Column* column = &columns[columnIndex];
+	uint2 state = randomState;
+		
+	int synapseOffset = columnIndex * COLUMN_PROXIMAL_SYNAPSE_COUNT;
+	int worstSynapseIndex = 0;
+	float worstSynapsePermanence = 0;
+	for (int i = 0; i < COLUMN_PROXIMAL_SYNAPSE_COUNT; ++i)
+	{
+		global Synapse* synapse = &synapses[i + synapseOffset];	
+		if (i == 0 || synapse->permanence < worstSynapsePermanence)
+		{
+			worstSynapsePermanence = synapse->permanence;
+			worstSynapseIndex = i;
+		}
+	}
+	resetSynapse(&synapses[worstSynapseIndex + synapseOffset], columnIndex, &state);
+}
+
 void kernel computeOverlap(
 	global Column* columns,
 	global Synapse* synapses,
 	global const char* input)
 {
-	int index = get_global_id(0);
+	int columnIndex = get_global_id(0);
 
-	global Column* col = &columns[index];
+	global Column* col = &columns[columnIndex];
 
 	// Calculate the number of synapses that point to active input bits
 	float overlap = 0;
 
-	int synapseOffset = index * COLUMN_PROXIMAL_SYNAPSE_COUNT;
+	int synapseOffset = columnIndex * COLUMN_PROXIMAL_SYNAPSE_COUNT;
 	for (int i = 0; i < COLUMN_PROXIMAL_SYNAPSE_COUNT; ++i)
 	{
 		global Synapse* syn = &synapses[synapseOffset + i];
@@ -131,8 +156,8 @@ void kernel inhibitNeighbours(
 	global Column* columns,
 	global Synapse* synapses)
 {
-	int index = get_global_id(0);
-	global Column* col = &columns[index];
+	int columnIndex = get_global_id(0);
+	global Column* col = &columns[columnIndex];
 
 	if (!col->active)
 		return;
@@ -143,8 +168,8 @@ void kernel inhibitNeighbours(
 	int nWidth = INHIBITION_RADIUS;
 	int nHeight = INHIBITION_RADIUS;
 		
-	int colX = index % REGION_WIDTH;
-	int colY = index / REGION_WIDTH;
+	int colX = columnIndex % REGION_WIDTH;
+	int colY = columnIndex / REGION_WIDTH;
 
 	int minX = colX-nWidth/2;
 	int maxX = colX+nWidth/2+1;
@@ -214,10 +239,10 @@ void kernel updatePermanences(
 	global Synapse* synapses,
 	global const char* input)
 {
-	int index = get_global_id(0);
+	int columnIndex = get_global_id(0);
 
-	global Column* col = &columns[index];
-	int columnSynapseOffset = index * COLUMN_PROXIMAL_SYNAPSE_COUNT;
+	global Column* col = &columns[columnIndex];
+	int columnSynapseOffset = columnIndex * COLUMN_PROXIMAL_SYNAPSE_COUNT;
 
 	if (col->active)
 	{

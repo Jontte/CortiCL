@@ -39,12 +39,15 @@ private:
 	cl::KernelFunctor m_computeOverlapKernel;
 	cl::KernelFunctor m_inhibitNeighboursKernel;
 	cl::KernelFunctor m_updatePermanencesKernel;
+	cl::KernelFunctor m_refineRegionKernel;
 
 	std::vector<CLColumn> m_columnData;
 	std::vector<CLSynapse> m_synapseData;
 	cl::Buffer m_columnDataBuffer;
 	cl::Buffer m_synapseDataBuffer;
 	cl::Buffer m_inputDataBuffer;
+	
+	int m_refineCounter;
 
 public:
 

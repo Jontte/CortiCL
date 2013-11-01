@@ -20,6 +20,7 @@ CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::C
 	, m_columnDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(CLColumn))
 	, m_synapseDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * args.ColumnProximalSynapseCount* sizeof(CLSynapse))
 	, m_inputDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getInputSize() * sizeof(cl_char))
+	, m_refineCounter(0)
 {
 	std::cerr << "CLSpatialPooler: Initializing" << std::endl;
 
@@ -44,6 +45,7 @@ CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::C
 	m_computeOverlapKernel = cl::KernelFunctor(cl::Kernel(program, "computeOverlap"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 	m_inhibitNeighboursKernel = cl::KernelFunctor(cl::Kernel(program, "inhibitNeighbours"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 	m_updatePermanencesKernel = cl::KernelFunctor(cl::Kernel(program, "updatePermanences"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
+	m_refineRegionKernel = cl::KernelFunctor(cl::Kernel(program, "refineRegion"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 
 	// Initialize all columns
 	m_columnData.resize(m_topology.getColumns());
@@ -87,6 +89,16 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 
 	// Phase 3: Update permanences
 	m_updatePermanencesKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);
+	
+	// Extra: Refine region (reset bad synapses) every N iterations
+	if (++m_refineCounter > 100)
+	{
+		cl_uint2 randomState;
+		randomState.s[0] = rand();
+		randomState.s[1] = rand();
+		m_refineRegionKernel(m_columnDataBuffer, m_synapseDataBuffer, randomState);
+		m_refineCounter = 0;
+	}
 
 	// Download list of active columns from the compute device
 	m_commandQueue.enqueueReadBuffer(m_columnDataBuffer, CL_TRUE, 0, sizeof(CLColumn) * m_columnData.size(), &m_columnData[0]);
