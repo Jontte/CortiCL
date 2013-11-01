@@ -62,9 +62,9 @@ void resetSynapse(global Synapse* synapse, int columnIndex, uint2* randomState)
 		maxX = min(INPUT_WIDTH,  iX + RECEPTIVE_FIELD_RADIUS);
 		maxY = min(INPUT_HEIGHT, iY + RECEPTIVE_FIELD_RADIUS);
 	}
-	
-	int x = minX + random(randomState) % (maxX-minX+1);
-	int y = minY + random(randomState) % (maxY-minY+1);
+
+	int x = minX + random(randomState) % (maxX-minX);
+	int y = minY + random(randomState) % (maxY-minY);
 	synapse -> target = x + y * INPUT_WIDTH;
 }
 
