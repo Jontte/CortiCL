@@ -24,7 +24,7 @@ CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::C
 	std::cerr << "CLSpatialPooler: Initializing" << std::endl;
 
 	// Install kernel programs
-	std::string definitions = args.serialize();
+	std::string definitions = args.serialize() + topo.serialize();
 
 	cl::Program::Sources sources;
 	sources.push_back({definitions.c_str(), definitions.length()});
@@ -113,8 +113,7 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 	m_computeOverlapKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer, m_topology.getInputSize());
 
 	// Phase 2: Inhibit neighbours
-	//                                                                 int nWidth,                  int nHeight,                 int regionWidth,        int regionHeight
-	m_inhibitNeighboursKernel(m_columnDataBuffer, m_synapseDataBuffer, m_topology.inhibitionRadius, m_topology.inhibitionRadius, m_topology.regionWidth, m_topology.regionHeight);
+	m_inhibitNeighboursKernel(m_columnDataBuffer, m_synapseDataBuffer);
 
 	// Phase 3: Update permanences
 	m_updatePermanencesKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);

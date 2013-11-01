@@ -53,11 +53,7 @@ void kernel computeOverlap(
 
 void kernel inhibitNeighbours(
 	global Column* columns,
-	global Synapse* synapses,
-	int nWidth,
-	int nHeight,
-	int regionWidth,
-	int regionHeight)
+	global Synapse* synapses)
 {
 	int index = get_global_id(0);
 	global Column* col = &columns[index];
@@ -65,11 +61,14 @@ void kernel inhibitNeighbours(
 	if (!col->active)
 		return;
 
-	// Given neighbourhood of nWidth*nHeight and total region topology of regionWidth*regionHeight,
+	// Given neighbourhood of nWidth*nHeight and total region topology of REGION_WIDTH*REGION_HEIGHT,
 	// inhibit current column so that the neighbourhood has approximately SPARSITY_TARGET ratio of columns active
 
-	int colX = index % regionWidth;
-	int colY = index / regionWidth;
+	int nWidth = INHIBITION_RADIUS;
+	int nHeight = INHIBITION_RADIUS;
+		
+	int colX = index % REGION_WIDTH;
+	int colY = index / REGION_WIDTH;
 
 	int minX = colX-nWidth/2;
 	int maxX = colX+nWidth/2+1;
@@ -80,16 +79,16 @@ void kernel inhibitNeighbours(
 	{
 		// Global inhibition
 		minX = 0;
-		maxX = regionWidth;
+		maxX = REGION_WIDTH;
 		minY = 0;
-		maxY = regionHeight;
+		maxY = REGION_HEIGHT;
 	}
 	else
 	{
 		if (minX < 0) minX = 0;
-		if (maxX > regionWidth) maxX = regionWidth;
+		if (maxX > REGION_WIDTH) maxX = REGION_WIDTH;
 		if (minY < 0) minY = 0;
-		if (maxY > regionHeight) maxY = regionHeight;
+		if (maxY > REGION_HEIGHT) maxY = REGION_HEIGHT;
 	}
 
 	int numActiveColumns = 0;
@@ -110,7 +109,7 @@ void kernel inhibitNeighbours(
 			{
 				if (x == colX && y == colY) continue;
 
-				global Column* curColumn = &columns[y * regionWidth + x];
+				global Column* curColumn = &columns[y * REGION_WIDTH + x];
 
 				float act = curColumn->overlap;
 

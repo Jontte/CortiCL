@@ -26,7 +26,7 @@ CLTemporalPooler::CLTemporalPooler(cl::Device& device, cl::Context& context, cl:
 	std::cerr << "CLTemporalPooler: Initializing" << std::endl;
 
 	// Install kernel programs
-	std::string definitions = args.serialize();
+	std::string definitions = args.serialize() + topo.serialize();
 
 	cl::Program::Sources sources;
 	sources.push_back({definitions.c_str(), definitions.length()});

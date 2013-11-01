@@ -1,6 +1,8 @@
 #ifndef CLTOPOLOGY_H_INCLUDED
 #define CLTOPOLOGY_H_INCLUDED
 
+#include <string>
+
 struct CLTopology
 {
 	// Input data topology
@@ -54,6 +56,8 @@ struct CLTopology
 		ret.receptiveFieldRadius = receptiveFieldRadius;
 		return ret;
 	}
+	
+	std::string serialize() const;
 };
 
 
