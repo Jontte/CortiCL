@@ -18,8 +18,6 @@ typedef struct
 
 typedef struct
 {
-	uchar synapseCount;
-
 	// Activity of the segment
 	// 0 = activeState, 1 = learnState
 	// 0 = now, 1 = previous timestep
@@ -36,8 +34,6 @@ typedef struct
 
 typedef struct
 {
-	uchar segmentCount;
-	uchar newSegmentCount;
 	uchar state;
 } Cell;
 
@@ -64,18 +60,17 @@ inline global Cell* getCells(const State* state, int columnIdx)
 inline global Segment* getSegments(const State* state, int columnIdx, int cellIdx)
 {
 	return &state->segments[
-	columnIdx * CELL_MAX_SEGMENTS * COLUMN_CELL_COUNT
-	+ cellIdx * CELL_MAX_SEGMENTS];
+	columnIdx * CELL_SEGMENT_COUNT * COLUMN_CELL_COUNT
+	+ cellIdx * CELL_SEGMENT_COUNT];
 }
 inline global Synapse* getSynapses(const State* state, int columnIdx, int cellIdx, int segmentIdx)
 {
 	return &state->synapses[
-	columnIdx * SEGMENT_MAX_SYNAPSES * CELL_MAX_SEGMENTS * COLUMN_CELL_COUNT
-	+ cellIdx * SEGMENT_MAX_SYNAPSES * CELL_MAX_SEGMENTS
-	+ segmentIdx * SEGMENT_MAX_SYNAPSES
+	columnIdx * SEGMENT_SYNAPSE_COUNT * CELL_SEGMENT_COUNT * COLUMN_CELL_COUNT
+	+ cellIdx * SEGMENT_SYNAPSE_COUNT * CELL_SEGMENT_COUNT
+	+ segmentIdx * SEGMENT_SYNAPSE_COUNT
 	];
 }
-
 
 inline bool getCellState(uchar state, TimeStep when, uchar stateMask)
 {
@@ -86,11 +81,11 @@ inline void setCellState(global Cell* cell, uchar stateMask)
 	cell->state |= stateMask;
 }
 
-uint random(uint2 seedValue)
+uint random(uint2* seedValue)
 {
-	uint seed = seedValue.x + get_global_id(0);
+	uint seed = (seedValue->x++) + get_global_id(0);
 	uint t = seed ^ (seed << 11);
-	return seedValue.y ^ (seedValue.y >> 19) ^ (t ^ (t >> 8));
+	return seedValue->y ^ (seedValue->y >> 19) ^ (t ^ (t >> 8));
 }
 
 inline bool segmentActivity(global Segment* segment, TimeStep when, CellState state)
@@ -112,7 +107,7 @@ global Segment* getActiveSegment(const State* state, int columnIdx, int cellIdx,
 	global Segment* segments = getSegments(state, columnIdx, cellIdx);
 
 	bool activeSequenceSegments = false;
-	for (int i = 0; i < cell->segmentCount; ++i)
+	for (int i = 0; i < CELL_SEGMENT_COUNT; ++i)
 	{
 		global Segment* seg = segments + i;
 		if (seg->sequenceSegment && segmentActive(seg, when, cellState))
@@ -125,7 +120,7 @@ global Segment* getActiveSegment(const State* state, int columnIdx, int cellIdx,
 	int bestActivityIdx = -1;
 	int bestActivity = -1;
 
-	for (int i = 0; i < cell->segmentCount; ++i)
+	for (int i = 0; i < CELL_SEGMENT_COUNT; ++i)
 	{
 		global Segment* seg = segments + i;
 		if (activeSequenceSegments && !seg->sequenceSegment)
@@ -164,7 +159,7 @@ BestMatchingSegmentStruct getBestMatchingSegment(const State* state, int columnI
 	// Return segment with highest activity
 
 	global Segment* segments = getSegments(state, columnIdx, cellIdx);
-	for (int i = 0; i < cell->segmentCount; ++i)
+	for (int i = 0; i < CELL_SEGMENT_COUNT; ++i)
 	{
 		global Segment* seg = segments + i;
 
@@ -200,53 +195,25 @@ BestMatchingCellStruct getBestMatchingCell(const State* state, int columnIdx, Ti
 	ret.cellIdx = -1;
 	ret.segmentIdx = -1;
 
-	{
-		int bestActivityIdx = -1;
-		int bestActivity = 0;
+	int bestActivityIdx = -1;
+	int bestActivity = 0;
 
-		// Return cell and segment with highest activity
-
-		for (int i = 0; i < COLUMN_CELL_COUNT; ++i)
-		{
-			global Cell* cell = cells + i;
-			BestMatchingSegmentStruct bestSegment =
-				getBestMatchingSegment(state, columnIdx, i, when);
-
-			if (bestSegment.activity > bestActivity)
-			{
-				bestActivity = bestSegment.activity;
-				ret.cell = cell;
-				ret.cellIdx = i;
-				ret.segment = bestSegment.segment;
-				ret.segmentIdx = bestSegment.segmentIdx;
-			}
-		}
-
-		if (bestActivityIdx != -1)
-		{
-			return ret;
-		}
-	}
-
-	// No best cell, return just cell with fewest segments
-	int fewestSegmentsIdx = -1;
-	int fewestSegments = 0;
-
+	// Return cell and segment with highest activity
 	for (int i = 0; i < COLUMN_CELL_COUNT; ++i)
 	{
 		global Cell* cell = cells + i;
-		int num = cell->segmentCount;
+		BestMatchingSegmentStruct bestSegment =
+			getBestMatchingSegment(state, columnIdx, i, when);
 
-		if (num < fewestSegments || fewestSegmentsIdx == -1)
+		if (bestSegment.activity > bestActivity || i == 0)
 		{
-			fewestSegments = num;
-			fewestSegmentsIdx = i;
+			bestActivity = bestSegment.activity;
+			ret.cell = cell;
+			ret.cellIdx = i;
+			ret.segment = bestSegment.segment;
+			ret.segmentIdx = bestSegment.segmentIdx;
 		}
 	}
-	ret.cell = cells + fewestSegmentsIdx;
-	ret.cellIdx = fewestSegmentsIdx;
-	ret.segment = 0;
-	ret.segmentIdx = -1;
 	return ret;
 }
 
@@ -257,50 +224,18 @@ void getSegmentActiveSynapses(
 	int segmentIdx,
 	TimeStep when,
 	bool newSynapses,
-	uint2 seedValue // Seed value provided by cpu
+	uint2* randomState
 	)
 {
 	global Cell* cell = getCells(state, columnIdx) + cellIdx;
-	global Segment* segment = 0;
-
-	// Add a segment update structure to given cell
-	if (segmentIdx == -1)
-	{
-		// Create new segment
-		if (cell->segmentCount + cell->newSegmentCount >= CELL_MAX_SEGMENTS)
-		{
-			// No more room in this cell..
-			return;
-		}
-
-		segmentIdx = cell->segmentCount + cell->newSegmentCount;
-		segment = getSegments(state, columnIdx, cellIdx) + segmentIdx;
-		cell->newSegmentCount++;
-
-		segment->synapseCount = 0;
-		segment->activity[0][0] = 0;
-		segment->activity[1][0] = 0;
-		segment->activity[0][1] = 0;
-		segment->activity[1][1] = 0;
-		segment->fullActivity[0][0] = 0;
-		segment->fullActivity[1][0] = 0;
-		segment->fullActivity[0][1] = 0;
-		segment->fullActivity[1][1] = 0;
-		segment->sequenceSegment = 0;
-		segment->hasQueuedChanges = false;
-	}
-	else
-	{
-		segment = getSegments(state, columnIdx, cellIdx) + segmentIdx;
-	}
-
+	global Segment* segment = getSegments(state, columnIdx, cellIdx) + segmentIdx;
 	global Synapse* synapses = getSynapses(state, columnIdx, cellIdx, segmentIdx);
 
 	// If no changes have been queued, set permamenceQueued of each synapse to match current permanence
 	bool hasChanges = segment->hasQueuedChanges;
 	if (!hasChanges)
 	{
-		for (int i = 0 ; i < segment->synapseCount; ++i)
+		for (int i = 0 ; i < SEGMENT_SYNAPSE_COUNT; ++i)
 		{
 			global Synapse* synapse = synapses + i;
 			synapse->permanenceQueued = synapse->permanence;
@@ -310,7 +245,7 @@ void getSegmentActiveSynapses(
 	}
 
 	// Find active synapses in segment
-	for (int i = 0 ; i < segment->synapseCount; ++i)
+	for (int i = 0 ; i < SEGMENT_SYNAPSE_COUNT; ++i)
 	{
 		global Synapse* synapse = synapses + i;
 		if (getCellState(synapse->targetCellState, when, ACTIVESTATE))
@@ -323,71 +258,56 @@ void getSegmentActiveSynapses(
 		}
 	}
 
-	// Enhance segment by adding new synapses
+	// Enhance segment by connecting some of the worst synapses to learning cells
 	if (newSynapses)
 	{
-		int insertId = 0;
-		if (segment->synapseCount >= SEGMENT_MAX_SYNAPSES)
+		// For each bad synapse...
+		for (int b = 0; b < SEGMENT_SYNAPSE_COUNT; ++b)
 		{
-			// Drop one inactive synapse to make room..
-			for (int i = 0; i < segment->synapseCount; ++i)
-			{
-				global Synapse* synapse = synapses + i;
-				if (! getCellState(synapse->targetCellState, when, LEARNSTATE))
-				{
-					insertId = i;
-					break;
-				}
-			}
-		}
-		else
-		{
-			insertId = segment->synapseCount;
-		}
+			global Synapse* synapse = synapses + b;
 
-		// Globally search for a learning cell. SLOW.
-		// Generate a random number to decide where to start the search
-
-		int randOffset = random(seedValue);
-
-		int targetColumn = -1;
-		int targetCell = -1;
-		for (int i = 0; i < get_global_size(0); ++i)
-		{
-			int testColumnId = (columnIdx+i) % get_global_size(0);
-
-			global Cell* testColumn = getCells(state, testColumnId);
-
-			if (testColumnId == columnIdx) // Skip self...
+			if (synapse->permanence > CONNECTED_PERMANENCE / 2.0)
 				continue;
 
-			for (int a = 0; a < COLUMN_CELL_COUNT; ++a)
+			// Globally search for a learning cell. SLOW.
+			// Generate a random number to decide where to start the search
+			int randOffset = random(randomState);
+
+			int targetColumn = -1;
+			int targetCell = -1;
+			for (int i = 0; i < get_global_size(0); ++i)
 			{
-				global Cell* testCell = testColumn + a;
-				if (getCellState(testCell->state, when, LEARNSTATE))
+				int testColumnId = (randOffset+i) % get_global_size(0);
+
+				global Cell* testColumn = getCells(state, testColumnId);
+
+				if (testColumnId == columnIdx) // Skip self...
+					continue;
+
+				for (int a = 0; a < COLUMN_CELL_COUNT; ++a)
 				{
-					// Found one!
-					targetColumn = testColumnId;
-					targetCell = a;
-					break;
+					global Cell* testCell = testColumn + a;
+					if (getCellState(testCell->state, when, LEARNSTATE))
+					{
+						// Found one!
+						targetColumn = testColumnId;
+						targetCell = a;
+						break;
+					}
 				}
+				if (targetColumn != -1)
+					break;
 			}
+
 			if (targetColumn != -1)
-				break;
-		}
-
-		if (targetColumn != -1)
-		{
-			// We have a new target for the synapse
-			if (segment->synapseCount < SEGMENT_MAX_SYNAPSES)
-				segment->synapseCount++;
-
-			global Synapse* syn = getSynapses(state, columnIdx, cellIdx, segmentIdx) + insertId;
-			syn->targetColumn = targetColumn;
-			syn->targetCell = targetCell;
-			syn->permanence = 0.2;
-			syn->permanenceQueued = 0.2;
-			syn->targetCellState = 0;
+			{
+				// We have a new target for the synapse
+				synapse->targetColumn = targetColumn;
+				synapse->targetCell = targetCell;
+				synapse->permanence = CONNECTED_PERMANENCE*2;
+				synapse->permanenceQueued = CONNECTED_PERMANENCE*2;
+				synapse->targetCellState = 0;
+			}
 		}
 	}
 }
@@ -395,11 +315,9 @@ void getSegmentActiveSynapses(
 void adaptSegments(const State* state, int columnIdx, int cellIdx, bool positiveReinforcement)
 {
 	global Cell* cell = getCells(state, columnIdx) + cellIdx;
-	cell->segmentCount += cell->newSegmentCount;
-	cell->newSegmentCount = 0;
-
 	global Segment* segments = getSegments(state, columnIdx, cellIdx);
-	for (int i = 0; i < cell->segmentCount; ++i)
+
+	for (int i = 0; i < CELL_SEGMENT_COUNT; ++i)
 	{
 		global Segment* segment = segments + i;
 		global Synapse* synapses = getSynapses(state, columnIdx, cellIdx, i);
@@ -412,7 +330,7 @@ void adaptSegments(const State* state, int columnIdx, int cellIdx, bool positive
 		if (positiveReinforcement)
 		{
 			// Cool, use the enhanced values of all synapses
-			for (int a = 0; a < segment->synapseCount; ++a)
+			for (int a = 0; a < SEGMENT_SYNAPSE_COUNT; ++a)
 			{
 				global Synapse* synapse = synapses + a;
 				synapse->permanence = synapse->permanenceQueued;
@@ -420,9 +338,8 @@ void adaptSegments(const State* state, int columnIdx, int cellIdx, bool positive
 		}
 		else
 		{
-			// Oops, misprediction. Synapses with enhanced permanence get their permanence flipped, the rest stay untouched
-
-			for (int a = 0; a < segment->synapseCount; ++a)
+			// Oops, misprediction. Synapses that had their permanence enhanced are flipped, the rest stay untouched
+			for (int a = 0; a < SEGMENT_SYNAPSE_COUNT; ++a)
 			{
 				global Synapse* synapse = synapses + a;
 				if (synapse->permanenceQueued > synapse->permanence)
@@ -431,13 +348,60 @@ void adaptSegments(const State* state, int columnIdx, int cellIdx, bool positive
 				}
 			}
 		}
-		for (int a = 0; a < segment->synapseCount; ++a)
+		for (int a = 0; a < SEGMENT_SYNAPSE_COUNT; ++a)
 		{
 			global Synapse* synapse = synapses + a;
-			if (synapse->permanence > 1.0)
-				synapse->permanence = 1.0;
-			else if (synapse->permanence < 0.0)
-				synapse->permanence = 0.0;
+			if (synapse->permanence > 1.0f)
+				synapse->permanence = 1.0f;
+			else if (synapse->permanence < 0.0f)
+				synapse->permanence = 0.0f;
+		}
+	}
+}
+
+void kernel initRegion(
+	global Cell* g_cells,
+	global Segment* g_segments,
+	global Synapse* g_synapses,
+	uint2 randomState)
+{
+	State state = makeState(g_cells, g_segments, g_synapses);
+	int columnIdx = get_global_id(0);
+
+	// Get cells of the current column
+	global Cell* cells = getCells(&state, columnIdx);
+
+	for (int i = 0 ; i < COLUMN_CELL_COUNT; ++i)
+	{
+		global Cell* cell = cells + i;
+		cell->state = 0;
+
+		global Segment* segments = getSegments(&state, columnIdx, i);
+		for (int a = 0; a < CELL_SEGMENT_COUNT; ++a)
+		{
+			global Segment* segment = segments + a;
+			segment->activity[0][WAS] = 0;
+			segment->activity[1][WAS] = 0;
+			segment->activity[0][NOW] = 0;
+			segment->activity[1][NOW] = 0;
+			segment->fullActivity[0][WAS] = 0;
+			segment->fullActivity[1][WAS] = 0;
+			segment->fullActivity[0][NOW] = 0;
+			segment->fullActivity[1][NOW] = 0;
+			segment->sequenceSegment = false;
+			segment->sequenceSegmentQueued = false;
+			segment->hasQueuedChanges = false;
+
+			global Synapse* synapses = getSynapses(&state, columnIdx, i, a);
+			for (int b = 0; b < SEGMENT_SYNAPSE_COUNT; ++b)
+			{
+				global Synapse* synapse = synapses + b;
+				synapse->targetCellState = 0;
+				synapse->targetCell = 0;
+				synapse->targetColumn = 0;
+				synapse->permanence = 0;
+				synapse->permanenceQueued = 0;
+			}
 		}
 	}
 }
@@ -459,7 +423,7 @@ void kernel timeStep(
 		cell->state = cell->state << 4;
 
 		global Segment* segments = getSegments(&state, columnIdx, i);
-		for (int a = 0; a < cell->segmentCount; ++a)
+		for (int a = 0; a < CELL_SEGMENT_COUNT; ++a)
 		{
 			global Segment* segment = segments + a;
 			segment->activity[0][WAS] = segment->activity[0][NOW];
@@ -472,7 +436,7 @@ void kernel timeStep(
 			segment->fullActivity[1][NOW] = 0;
 
 			global Synapse* synapses = getSynapses(&state, columnIdx, i, a);
-			for (int b = 0; b < segment->synapseCount; ++b)
+			for (int b = 0; b < SEGMENT_SYNAPSE_COUNT; ++b)
 			{
 				global Synapse* synapse = synapses + b;
 				synapse->targetCellState = synapse->targetCellState << 4;
@@ -486,7 +450,7 @@ void kernel computeActiveState(
 	global Segment* g_segments,
 	global Synapse* g_synapses,
 	global const char* activeColumns,
-	uint2 seedValue)
+	uint2 randomState)
 {
 	State state = makeState(g_cells, g_segments, g_synapses);
 	int columnIdx = get_global_id(0);
@@ -545,7 +509,7 @@ void kernel computeActiveState(
 		int learnSegmentIdx = ret.segmentIdx;
 		setCellState(learnCell, LEARNSTATE);
 
-		getSegmentActiveSynapses(&state, columnIdx, learnCellIdx, learnSegmentIdx, WAS, true, seedValue);
+		getSegmentActiveSynapses(&state, columnIdx, learnCellIdx, learnSegmentIdx, WAS, true, &randomState);
 		if (learnSegment)
 			learnSegment->sequenceSegmentQueued = true;
 	}
@@ -556,7 +520,7 @@ void kernel computePredictiveState(
 	global Segment* g_segments,
 	global Synapse* g_synapses,
 	global const char* activeColumns,
-	uint2 seedValue)
+	uint2 randomState)
 {
 	State state = makeState(g_cells, g_segments, g_synapses);
 
@@ -568,7 +532,7 @@ void kernel computePredictiveState(
 		global Cell* cell = cells + i;
 		global Segment* segments = getSegments(&state, columnIdx, i);
 
-		for (int a = 0 ; a < cell->segmentCount; ++a)
+		for (int a = 0 ; a < CELL_SEGMENT_COUNT; ++a)
 		{
 			global Segment* segment = segments + a;
 
@@ -578,7 +542,7 @@ void kernel computePredictiveState(
 			int learnActivity = 0;
 			int fullLearnActivity = 0;
 			global Synapse* synapses = getSynapses(&state, columnIdx, i, a);
-			for (int b = 0 ; b < segment->synapseCount; ++b)
+			for (int b = 0 ; b < SEGMENT_SYNAPSE_COUNT; ++b)
 			{
 				global Synapse* syn = synapses + b;
 
@@ -608,10 +572,10 @@ void kernel computePredictiveState(
 			{
 				setCellState(cell, PREDICTIVESTATE);
 
-				getSegmentActiveSynapses(&state, columnIdx, i, a, NOW, false, seedValue);
+				getSegmentActiveSynapses(&state, columnIdx, i, a, NOW, false, &randomState);
 
 				BestMatchingSegmentStruct bestMatch = getBestMatchingSegment(&state, columnIdx, i, WAS);
-				getSegmentActiveSynapses(&state, columnIdx, i, bestMatch.segmentIdx, WAS, true, seedValue);
+				getSegmentActiveSynapses(&state, columnIdx, i, bestMatch.segmentIdx, WAS, true, &randomState);
 			}
 		}
 	}

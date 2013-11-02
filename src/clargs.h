@@ -17,8 +17,8 @@ struct CLArgs
 
 	// Temporal pooler:
 	int ColumnCellCount = 4;
-	int CellMaxSegments = 10;
-	int SegmentMaxSynapses = 10;
+	int CellSegmentCount = 10;
+	int SegmentSynapseCount = 10;
 	int SegmentActivationThreshold = 5;
 	int SegmentMinThreshold = 3;
 

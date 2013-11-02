@@ -19,8 +19,8 @@ CLTemporalPooler::CLTemporalPooler(cl::Device& device, cl::Context& context, cl:
 	, m_topology(topo)
 	, m_args(args)
 	, m_cellDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(CLCell) * args.ColumnCellCount)
-	, m_segmentDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(CLSegment) * args.ColumnCellCount * args.CellMaxSegments)
-	, m_synapseDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(CLSynapse) * args.ColumnCellCount * args.CellMaxSegments * args.SegmentMaxSynapses)
+	, m_segmentDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(CLSegment) * args.ColumnCellCount * args.CellSegmentCount)
+	, m_synapseDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(CLSynapse) * args.ColumnCellCount * args.CellSegmentCount * args.SegmentSynapseCount)
 	, m_inputDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(cl_char))
 {
 	std::cerr << "CLTemporalPooler: Initializing" << std::endl;
@@ -50,31 +50,18 @@ CLTemporalPooler::CLTemporalPooler(cl::Device& device, cl::Context& context, cl:
 
 	// Initialize all columns
 	m_cellData.resize(m_topology.getColumns() * args.ColumnCellCount);
-	m_segmentData.resize(m_topology.getColumns() * args.ColumnCellCount * args.CellMaxSegments);
-	m_synapseData.resize(m_topology.getColumns() * args.ColumnCellCount * args.CellMaxSegments * args.SegmentMaxSynapses);
+	m_segmentData.resize(m_topology.getColumns() * args.ColumnCellCount * args.CellSegmentCount);
+	m_synapseData.resize(m_topology.getColumns() * args.ColumnCellCount * args.CellSegmentCount * args.SegmentSynapseCount);
 
-	std::random_device dev;
-	std::mt19937 gen(dev());
+	// Initialize region
+	cl::KernelFunctor initRegion =
+		cl::KernelFunctor(cl::Kernel(program, "initRegion"), m_commandQueue,
+		cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 
-	for (CLCell& cell: m_cellData)
-	{
-		cell.segmentCount = 0;
-		cell.state = 0;
-	}
-	for (CLSegment& seg: m_segmentData)
-	{
-		seg.sequenceSegment = false;
-		seg.hasQueuedChanges = false;
-	}
-	for (CLSynapse& syn: m_synapseData)
-	{
-		syn.permanence = 0;
-		syn.targetCell = 0;
-		syn.targetColumn = 0;
-	}
-
-	// Upload columns to GPU
-	pushBuffers();
+	cl_uint2 randomState;
+	randomState.s[0] = rand();
+	randomState.s[1] = rand();
+	initRegion(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer, randomState);
 	std::cerr << "CLTemporalPooler: Kernels loaded" << std::endl;
 }
 void CLTemporalPooler::pullBuffers(bool cells, bool segments, bool synapses)
@@ -134,7 +121,7 @@ void CLTemporalPooler::getStats(CLStats& stats)
 {
 	pullBuffers();
 
-	stats.maxSegments = m_topology.getColumns() * m_args.ColumnCellCount * m_args.CellMaxSegments;
+	/*stats.maxSegments = m_topology.getColumns() * m_args.ColumnCellCount * m_args.CellMaxSegments;
 	stats.maxSynapses = m_topology.getColumns() * m_args.ColumnCellCount * m_args.CellMaxSegments * m_args.SegmentMaxSynapses;
 	stats.totalSegments = 0;
 	stats.totalSynapses = 0;
@@ -150,5 +137,5 @@ void CLTemporalPooler::getStats(CLStats& stats)
 			CLSegment& seg = m_segmentData[offset+a];
 			stats.totalSynapses += seg.synapseCount;
 		}
-	}
+	}*/
 }

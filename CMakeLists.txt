@@ -45,6 +45,9 @@ add_library(corticl STATIC
 if (${SDL2_FOUND})
 	add_executable(cldemo
 	src/demo/cldemo.cpp
+	src/demo/cldemo1.cpp
+	src/demo/cldemo2.cpp
+	src/demo/cldemo3.cpp
 	src/demo/sensor.cpp)
 
 	target_link_libraries(cldemo corticl SDL2 GL ${OPENCL_LIBRARIES})

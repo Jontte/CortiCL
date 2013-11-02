@@ -47,27 +47,18 @@ CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::C
 	m_updatePermanencesKernel = cl::KernelFunctor(cl::Kernel(program, "updatePermanences"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 	m_refineRegionKernel = cl::KernelFunctor(cl::Kernel(program, "refineRegion"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 
-	// Initialize all columns
 	m_columnData.resize(m_topology.getColumns());
 	m_synapseData.resize(m_topology.getColumns() * m_args.ColumnProximalSynapseCount);
 
-	std::random_device dev;
-	std::mt19937 gen(dev());
-	
 	// Initialize region
-	
-	cl::KernelFunctor initRegion = 
-		cl::KernelFunctor(cl::Kernel(program, "initRegion"), m_commandQueue, 
+	cl::KernelFunctor initRegion =
+		cl::KernelFunctor(cl::Kernel(program, "initRegion"), m_commandQueue,
 		cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-	
+
 	cl_uint2 randomState;
 	randomState.s[0] = rand();
 	randomState.s[1] = rand();
 	initRegion(m_columnDataBuffer, m_synapseDataBuffer, randomState);
-
-	// Upload columns to GPU
-// 	m_commandQueue.enqueueWriteBuffer(m_columnDataBuffer, CL_TRUE, 0, sizeof(CLColumn) * m_columnData.size(), &m_columnData[0]);
-// 	m_commandQueue.enqueueWriteBuffer(m_synapseDataBuffer, CL_TRUE, 0, sizeof(CLSynapse) * m_synapseData.size(), &m_synapseData[0]);
 
 	std::cerr << "CLSpatialPooler: Kernels loaded" << std::endl;
 }
@@ -89,7 +80,7 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 
 	// Phase 3: Update permanences
 	m_updatePermanencesKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);
-	
+
 	// Extra: Refine region (reset bad synapses) every N iterations
 	if (++m_refineCounter > 100)
 	{
@@ -127,6 +118,7 @@ void CLSpatialPooler::getStats(CLStats& stats)
 void CLSpatialPooler::backwards(const std::vector< cl_char >& columnActivation, std::vector< double >& result)
 {
 	// Make sure we're using the latest model by pulling it from the gpu..
+	//m_commandQueue.enqueueReadBuffer(m_columnDataBuffer, CL_TRUE, 0, sizeof(CLColumn) * m_columnData.size(), &m_columnData[0]);
 	m_commandQueue.enqueueReadBuffer(m_synapseDataBuffer, CL_TRUE, 0, sizeof(CLSynapse) * m_synapseData.size() , &m_synapseData[0]);
 
 	result.assign(m_topology.getInputSize(), 0);

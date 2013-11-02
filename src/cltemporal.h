@@ -34,8 +34,6 @@ private:
 	};
 	struct CLSegment
 	{
-		cl_uchar synapseCount;
-
 		// Activity of the segment
 		// 0 = activeState, 1 = learnState
 		// 0 = now, 1 = previous timestep
@@ -52,9 +50,6 @@ private:
 	};
 	struct CLCell
 	{
-		cl_uchar segmentCount;
-		cl_uchar newSegmentCount; // segments waiting to be added
-
 		// See state definitions above
 		cl_uchar state;
 	};

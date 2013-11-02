@@ -41,7 +41,7 @@ void resetSynapse(global Synapse* synapse, int columnIndex, uint2* randomState)
 	if (permanence > 1.0)
 		permanence = 1.0;
 	synapse -> permanence = permanence;
-	
+
 	// Calculate pseudorandom target bit based on receptive field radius
 	int columnX = columnIndex % REGION_WIDTH;
 	int columnY = columnIndex / REGION_WIDTH;
@@ -49,12 +49,12 @@ void resetSynapse(global Synapse* synapse, int columnIndex, uint2* randomState)
 	// Map column location in region to input space
 	int iX = INPUT_WIDTH  * ((float)columnX) / REGION_WIDTH;
 	int iY = INPUT_HEIGHT * ((float)columnY) / REGION_HEIGHT;
-	
-	int minX = 0; 
+
+	int minX = 0;
 	int minY = 0;
 	int maxX = INPUT_WIDTH;
 	int maxY = INPUT_HEIGHT;
-	
+
 	if (RECEPTIVE_FIELD_RADIUS >= 0)
 	{
 		minX = max(0, iX - RECEPTIVE_FIELD_RADIUS);
@@ -75,8 +75,7 @@ void kernel initRegion(
 {
 	int columnIndex = get_global_id(0);
 	global Column* column = &columns[columnIndex];
-	uint2 state = randomState;
-	
+
 	// Column startup parameters
 	column -> boost = 0.0;
 	column -> overlap = 0.0;
@@ -84,12 +83,12 @@ void kernel initRegion(
 	column -> activeDutyCycle = 0.1;
 	column -> minDutyCycle = 0.1;
 	column -> overlapDutyCycle = 0.1;
-	
+
 	int synapseOffset = columnIndex * COLUMN_PROXIMAL_SYNAPSE_COUNT;
 	for (int i = 0; i < COLUMN_PROXIMAL_SYNAPSE_COUNT; ++i)
 	{
-		global Synapse* synapse = &synapses[i + synapseOffset];	
-		resetSynapse(synapse, columnIndex, &state);
+		global Synapse* synapse = &synapses[i + synapseOffset];
+		resetSynapse(synapse, columnIndex, &randomState);
 	}
 }
 
@@ -101,21 +100,20 @@ void kernel refineRegion(
 {
 	int columnIndex = get_global_id(0);
 	global Column* column = &columns[columnIndex];
-	uint2 state = randomState;
-		
+
 	int synapseOffset = columnIndex * COLUMN_PROXIMAL_SYNAPSE_COUNT;
 	int worstSynapseIndex = 0;
 	float worstSynapsePermanence = 0;
 	for (int i = 0; i < COLUMN_PROXIMAL_SYNAPSE_COUNT; ++i)
 	{
-		global Synapse* synapse = &synapses[i + synapseOffset];	
+		global Synapse* synapse = &synapses[i + synapseOffset];
 		if (i == 0 || synapse->permanence < worstSynapsePermanence)
 		{
 			worstSynapsePermanence = synapse->permanence;
 			worstSynapseIndex = i;
 		}
 	}
-	resetSynapse(&synapses[worstSynapseIndex + synapseOffset], columnIndex, &state);
+	resetSynapse(&synapses[worstSynapseIndex + synapseOffset], columnIndex, &randomState);
 }
 
 void kernel computeOverlap(
@@ -167,7 +165,7 @@ void kernel inhibitNeighbours(
 
 	int nWidth = INHIBITION_RADIUS;
 	int nHeight = INHIBITION_RADIUS;
-		
+
 	int colX = columnIndex % REGION_WIDTH;
 	int colY = columnIndex / REGION_WIDTH;
 
