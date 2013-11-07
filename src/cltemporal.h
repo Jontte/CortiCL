@@ -47,6 +47,8 @@ private:
 		cl_bool sequenceSegment;
 		cl_bool sequenceSegmentQueued;
 		cl_bool hasQueuedChanges;
+
+		cl_float activeDutyCycle; // how often this segment is active when the cell is active
 	};
 	struct CLCell
 	{
@@ -65,6 +67,7 @@ private:
 	cl::KernelFunctor m_computeActiveStateKernel;
 	cl::KernelFunctor m_computePredictiveState;
 	cl::KernelFunctor m_updateSynapsesKernel;
+	cl::KernelFunctor m_refineRegionKernel;
 
 	std::vector<CLCell> m_cellData;
 	std::vector<CLSegment> m_segmentData;
@@ -73,6 +76,8 @@ private:
 	cl::Buffer m_segmentDataBuffer;
 	cl::Buffer m_synapseDataBuffer;
 	cl::Buffer m_inputDataBuffer;
+
+	int m_refineCounter;
 
 	void pushBuffers(bool cells = true, bool segments = true, bool synapses = true);
 	void pullBuffers(bool cells = true, bool segments = true, bool synapses = true);

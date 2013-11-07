@@ -30,6 +30,8 @@ typedef struct
 	bool sequenceSegment;
 	bool sequenceSegmentQueued;
 	bool hasQueuedChanges;
+
+	float activeDutyCycle; // how often this segment is active when the cell is active
 } Segment;
 
 typedef struct
@@ -100,6 +102,63 @@ inline bool segmentActive(global Segment* segment, TimeStep when, CellState stat
 {
 	return segmentActivity(segment, when, state) > SEGMENT_ACTIVATION_THRESHOLD;
 }
+void resetSynapse(const State* state, global Synapse* synapse, bool connectToLearningCell, TimeStep learningCellWhen, uint2* randomState)
+{
+	// If we fail to connect to a learning cell, fallback to a randomly selected cell
+	if (connectToLearningCell)
+	{
+		int randOffset = random(randomState) % get_global_size(0);
+
+		int targetColumn = -1;
+		int targetCell = -1;
+		int columnCount = get_global_size(0);
+		for (int i = 0; i < columnCount; ++i)
+		{
+			int testColumnId = (randOffset+i) % get_global_size(0);
+
+			global Cell* testColumn = getCells(state, testColumnId);
+
+			if (testColumnId == get_global_id(0)) // Skip self...
+				continue;
+
+			for (int a = 0; a < COLUMN_CELL_COUNT; ++a)
+			{
+				global Cell* testCell = testColumn + a;
+				if (getCellState(testCell->state, learningCellWhen, LEARNSTATE))
+				{
+					// Found one!
+					targetColumn = testColumnId;
+					targetCell = a;
+					break;
+				}
+			}
+			if (targetColumn != -1)
+				break;
+		}
+
+		// Check if we found a cell
+		if (targetColumn != -1)
+		{
+			synapse->targetColumn = targetColumn;
+			synapse->targetCell = targetCell;
+			synapse->permanence = CONNECTED_PERMANENCE*2;
+			synapse->targetCellState = 0;
+			return;
+		}
+	}
+
+	// Pick random column, skip self
+	int targetColumn = random(randomState) % (get_global_size(0)-1);
+	if (targetColumn >= get_global_id(0))
+		targetColumn++;
+	// Pick random cell
+	int targetCell = random(randomState) % COLUMN_CELL_COUNT;
+
+	synapse->targetColumn = targetColumn;
+	synapse->targetCell = targetCell;
+	synapse->permanence = CONNECTED_PERMANENCE*2;
+	synapse->targetCellState = 0;
+}
 
 global Segment* getActiveSegment(const State* state, int columnIdx, int cellIdx, TimeStep when, CellState cellState)
 {
@@ -166,7 +225,7 @@ BestMatchingSegmentStruct getBestMatchingSegment(const State* state, int columnI
 		// Check synapses that are not even fully connected
 		int activity = seg->fullActivity[ACTIVESTATE][when];
 
-		if (activity > bestActivity)
+		if (activity > bestActivity || i == 0)
 		{
 			bestActivity = activity;
 			bestActivityIdx = i;
@@ -227,7 +286,6 @@ void getSegmentActiveSynapses(
 	uint2* randomState
 	)
 {
-	global Cell* cell = getCells(state, columnIdx) + cellIdx;
 	global Segment* segment = getSegments(state, columnIdx, cellIdx) + segmentIdx;
 	global Synapse* synapses = getSynapses(state, columnIdx, cellIdx, segmentIdx);
 
@@ -269,45 +327,7 @@ void getSegmentActiveSynapses(
 			if (synapse->permanence > CONNECTED_PERMANENCE / 2.0)
 				continue;
 
-			// Globally search for a learning cell. SLOW.
-			// Generate a random number to decide where to start the search
-			int randOffset = random(randomState);
-
-			int targetColumn = -1;
-			int targetCell = -1;
-			for (int i = 0; i < get_global_size(0); ++i)
-			{
-				int testColumnId = (randOffset+i) % get_global_size(0);
-
-				global Cell* testColumn = getCells(state, testColumnId);
-
-				if (testColumnId == columnIdx) // Skip self...
-					continue;
-
-				for (int a = 0; a < COLUMN_CELL_COUNT; ++a)
-				{
-					global Cell* testCell = testColumn + a;
-					if (getCellState(testCell->state, when, LEARNSTATE))
-					{
-						// Found one!
-						targetColumn = testColumnId;
-						targetCell = a;
-						break;
-					}
-				}
-				if (targetColumn != -1)
-					break;
-			}
-
-			if (targetColumn != -1)
-			{
-				// We have a new target for the synapse
-				synapse->targetColumn = targetColumn;
-				synapse->targetCell = targetCell;
-				synapse->permanence = CONNECTED_PERMANENCE*2;
-				synapse->permanenceQueued = CONNECTED_PERMANENCE*2;
-				synapse->targetCellState = 0;
-			}
+			resetSynapse(state, synapse, true, when, randomState);
 		}
 	}
 }
@@ -359,6 +379,8 @@ void adaptSegments(const State* state, int columnIdx, int cellIdx, bool positive
 	}
 }
 
+
+
 void kernel initRegion(
 	global Cell* g_cells,
 	global Segment* g_segments,
@@ -391,17 +413,52 @@ void kernel initRegion(
 			segment->sequenceSegment = false;
 			segment->sequenceSegmentQueued = false;
 			segment->hasQueuedChanges = false;
+			segment->activeDutyCycle = 0;
 
 			global Synapse* synapses = getSynapses(&state, columnIdx, i, a);
 			for (int b = 0; b < SEGMENT_SYNAPSE_COUNT; ++b)
 			{
-				global Synapse* synapse = synapses + b;
-				synapse->targetCellState = 0;
-				synapse->targetCell = 0;
-				synapse->targetColumn = 0;
-				synapse->permanence = 0;
-				synapse->permanenceQueued = 0;
+				resetSynapse(&state, synapses+b, false, NOW, &randomState);
 			}
+		}
+	}
+}
+
+// Reset segment with the worst duty cycle
+void kernel refineRegion(
+	global Cell* g_cells,
+	global Segment* g_segments,
+	global Synapse* g_synapses,
+	uint2 randomState)
+{
+	State state = makeState(g_cells, g_segments, g_synapses);
+	int columnIdx = get_global_id(0);
+
+	// Get cells of the current column
+	global Cell* cells = getCells(&state, columnIdx);
+
+	for (int i = 0 ; i < COLUMN_CELL_COUNT; ++i)
+	{
+		global Cell* cell = cells + i;
+
+		float worstDutyCycle = 0;
+		int worstDutyCycleIndex = -1;
+
+		global Segment* segments = getSegments(&state, columnIdx, i);
+		for (int a = 0; a < CELL_SEGMENT_COUNT; ++a)
+		{
+			global Segment* segment = segments+a;
+			if (segment->activeDutyCycle < worstDutyCycle || a == 0)
+			{
+				worstDutyCycle = segment->activeDutyCycle;
+				worstDutyCycleIndex = a;
+			}
+		}
+
+		global Synapse* synapses = getSynapses(&state, columnIdx, i, worstDutyCycleIndex);
+		for (int a = 0; a < SEGMENT_SYNAPSE_COUNT; ++a)
+		{
+			resetSynapse(&state, synapses+a, true, NOW, &randomState);
 		}
 	}
 }
@@ -420,7 +477,7 @@ void kernel timeStep(
 	for (int i = 0 ; i < COLUMN_CELL_COUNT; ++i)
 	{
 		global Cell* cell = cells + i;
-		cell->state = cell->state << 4;
+		cell->state = (cell->state << 4) & 0xF0;
 
 		global Segment* segments = getSegments(&state, columnIdx, i);
 		for (int a = 0; a < CELL_SEGMENT_COUNT; ++a)
@@ -510,8 +567,7 @@ void kernel computeActiveState(
 		setCellState(learnCell, LEARNSTATE);
 
 		getSegmentActiveSynapses(&state, columnIdx, learnCellIdx, learnSegmentIdx, WAS, true, &randomState);
-		if (learnSegment)
-			learnSegment->sequenceSegmentQueued = true;
+		learnSegment->sequenceSegmentQueued = true;
 	}
 }
 
@@ -568,7 +624,9 @@ void kernel computePredictiveState(
 			segment->activity[1][NOW] = learnActivity;
 			segment->fullActivity[1][NOW] = fullLearnActivity;
 
-			if (segmentActive(segment, NOW, ACTIVESTATE))
+//			if (segmentActive(segment, NOW, ACTIVESTATE))
+//			if (segmentActivity(segment, NOW, ACTIVESTATE) > SEGMENT_ACTIVATION_THRESHOLD)
+			if (segment->activity[0][NOW] > SEGMENT_ACTIVATION_THRESHOLD)
 			{
 				setCellState(cell, PREDICTIVESTATE);
 
@@ -580,7 +638,6 @@ void kernel computePredictiveState(
 		}
 	}
 }
-
 void kernel updateSynapses(
 	global Cell* g_cells,
 	global Segment* g_segments,
@@ -605,7 +662,22 @@ void kernel updateSynapses(
 		{
 			adaptSegments(&state, columnIdx, i, false);
 		}
-		if (getCellState(cell->state, NOW, ACTIVESTATE|PREDICTIVESTATE))
+
+		// Update segment duty cycles
+		if (getCellState(cell->state, NOW, ACTIVESTATE))
+		{
+			global Segment* segments = getSegments(&state, columnIdx, i);
+			for (int a = 0; a < CELL_SEGMENT_COUNT; ++a)
+			{
+				global Segment* segment = segments+a;
+				bool active = segmentActive(segment, NOW, ACTIVESTATE);
+
+				const float persistence = 0.95f;
+				segment->activeDutyCycle *= persistence;
+				segment->activeDutyCycle += active * (1.0f - persistence);
+			}
+		}
+		if (getCellState(cell->state, NOW, PREDICTIVESTATE))
 		{
 			columnActive = true;
 		}

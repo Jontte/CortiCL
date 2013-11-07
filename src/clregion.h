@@ -18,8 +18,12 @@ struct CLStats
 	// Spatial pooler
 	double averageBoost;
 	double averageDutyCycle;
-	
+
 	// Temporal pooler
+	int predictiveState; // number of cells in predictive state
+	int activeState; // number of cells in active state
+	int learningState; // number of cells in learning state
+	double averageSegmentDutyCycle;
 };
 
 class CLRegion
