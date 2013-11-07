@@ -25,21 +25,21 @@ uint random(uint2* seedValue)
 float randfloat(uint2* seedValue)
 {
 	uint i = random(seedValue) % 1000;
-	return i / 1000.0;
+	return i / 1000.0f;
 }
 
 void resetSynapse(global Synapse* synapse, int columnIndex, uint2* randomState)
 {
 	// Calculate a pseudorandom permanence value centered at CONNECTED_PERMANENCE
-	float permanence = 0;
+	float permanence = 0.0f;
 	permanence += randfloat(randomState);
 	permanence -= randfloat(randomState);
-	permanence *= 0.5;
+	permanence *= 0.5f;
 	permanence += CONNECTED_PERMANENCE;
-	if (permanence < 0.0)
-		permanence = 0.0;
-	if (permanence > 1.0)
-		permanence = 1.0;
+	if (permanence < 0.0f)
+		permanence = 0.0f;
+	if (permanence > 1.0f)
+		permanence = 1.0f;
 	synapse -> permanence = permanence;
 
 	// Calculate pseudorandom target bit based on receptive field radius
@@ -77,12 +77,12 @@ void kernel initRegion(
 	global Column* column = &columns[columnIndex];
 
 	// Column startup parameters
-	column -> boost = 0.0;
-	column -> overlap = 0.0;
+	column -> boost = 0.0f;
+	column -> overlap = 0.0f;
 	column -> active = false;
-	column -> activeDutyCycle = 0.1;
-	column -> minDutyCycle = 0.1;
-	column -> overlapDutyCycle = 0.1;
+	column -> activeDutyCycle = 0.1f;
+	column -> minDutyCycle = 0.1f;
+	column -> overlapDutyCycle = 0.1f;
 
 	int synapseOffset = columnIndex * COLUMN_PROXIMAL_SYNAPSE_COUNT;
 	for (int i = 0; i < COLUMN_PROXIMAL_SYNAPSE_COUNT; ++i)
@@ -196,10 +196,10 @@ void kernel inhibitNeighbours(
 	int n = SPARSITY_TARGET * neighbours;
 
 	// Use partial selection sort to find the Nth activation
-	float activationSkip = -1;
+	float activationSkip = -1.0f;
 	for (int k = 0; k < n+1; k++)
 	{
-		float bestActivation = -1;
+		float bestActivation = -1.0f;
 		int bestActCount = 0;
 
 		for (int y = minY; y < maxY; ++y)
@@ -265,15 +265,15 @@ void kernel updatePermanences(
 	}
 
 	// Update duty cycles
-	col->minDutyCycle = 0.01 * 0.1; // 0.1 = maxDutyCycle of neighbourhood
+	col->minDutyCycle = 0.01f * 0.1f; // 0.1 = maxDutyCycle of neighbourhood
 	col->activeDutyCycle =
 		col->activeDutyCycle * DUTY_CYCLE_PERSISTENCE
-		+ col->active * (1.0 - DUTY_CYCLE_PERSISTENCE);
+		+ col->active * (1.0f - DUTY_CYCLE_PERSISTENCE);
 
 	if (col->activeDutyCycle <= col->minDutyCycle)
 		col->boost += BOOST_STEP;
 	else
-		col->boost = max(1.0, col->boost - BOOST_STEP);
+		col->boost = max(1.0f, col->boost - BOOST_STEP);
 
 	col->overlapDutyCycle = (col->overlapDutyCycle * DUTY_CYCLE_PERSISTENCE) + (col->activeDutyCycle > col->minDutyCycle) * (1.0 - DUTY_CYCLE_PERSISTENCE);
 
@@ -285,8 +285,8 @@ void kernel updatePermanences(
 			global Synapse* syn = &synapses[columnSynapseOffset + i];
 
 			syn->permanence += PERMANENCE_STEP;
-			if (syn->permanence > 1.0)
-				syn->permanence = 1.0;
+			if (syn->permanence > 1.0f)
+				syn->permanence = 1.0f;
 		}
 	}
 

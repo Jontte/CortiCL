@@ -324,7 +324,7 @@ void getSegmentActiveSynapses(
 		{
 			global Synapse* synapse = synapses + b;
 
-			if (synapse->permanence > CONNECTED_PERMANENCE / 2.0)
+			if (synapse->permanence > CONNECTED_PERMANENCE / 2.0f)
 				continue;
 
 			resetSynapse(state, synapse, true, when, randomState);
