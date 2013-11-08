@@ -9,25 +9,7 @@
 void checkEvents(bool* quit);
 void demo2Loop(SDL_Window* window, bool& spaceDown)
 {
-	std::vector< cl::Platform > platformList;
-	cl::Platform::get(&platformList);
-
-	if (platformList.empty())
-	{
-		throw std::runtime_error("No OpenCL platforms available");
-	}
-
-	auto& defaultPlatform = platformList.front();
-	std::vector< cl::Device > deviceList;
-	defaultPlatform.getDevices(CL_DEVICE_TYPE_ALL, &deviceList);
-	if (deviceList.empty())
-	{
-		throw std::runtime_error("OpenCL platform contains no devices");
-	}
-
-	auto& defaultDevice = deviceList.front();
-	cl::Context context({defaultDevice});
-
+	CLContext context;
 	bool done = false;
 
 	int columns = 32*32;
@@ -40,7 +22,7 @@ void demo2Loop(SDL_Window* window, bool& spaceDown)
 	args.ColumnProximalSynapseMinOverlap = 5;
 	args.ColumnProximalSynapseCount = 40;
 
-	CLRegion region(defaultDevice, context,
+	CLRegion region(context,
 					CLTopology::line(inputSize, columns, inhibitionRadius, receptiveFieldRadius),
 					args
 	);

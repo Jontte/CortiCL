@@ -49,24 +49,7 @@ void drawLine(double x1, double y1, double x2, double y2, double width, const T&
 
 void demo3Loop(SDL_Window* window, bool& spaceDown)
 {
-	std::vector< cl::Platform > platformList;
-	cl::Platform::get(&platformList);
-
-	if (platformList.empty())
-	{
-		throw std::runtime_error("No OpenCL platforms available");
-	}
-
-	auto& defaultPlatform = platformList.front();
-	std::vector< cl::Device > deviceList;
-	defaultPlatform.getDevices(CL_DEVICE_TYPE_ALL, &deviceList);
-	if (deviceList.empty())
-	{
-		throw std::runtime_error("OpenCL platform contains no devices");
-	}
-
-	auto& defaultDevice = deviceList.front();
-	cl::Context context({defaultDevice});
+	CLContext context;
 
 	bool done = false;
 	glEnable( GL_BLEND );
@@ -90,10 +73,7 @@ void demo3Loop(SDL_Window* window, bool& spaceDown)
  	args.ColumnProximalSynapseMinOverlap = 3;
  	args.ColumnProximalSynapseCount = 10;
 
-	CLRegion region(defaultDevice, context,
-		CLTopology::line(inputSize, columns, inhibitionRadius, receptiveFieldRadius),
-		args
-	);
+	CLRegion region(context, CLTopology::line(inputSize, columns, inhibitionRadius, receptiveFieldRadius), args );
 
 	std::vector<cl_char> dataIn(inputSize);
 	std::vector<cl_char> dataOut(columns);

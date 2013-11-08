@@ -11,15 +11,13 @@ constexpr static const char* SPATIAL_SRC =
 #include "spatial.cl.h"
 ;
 
-CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::CommandQueue& queue, const CLTopology& topo, const CLArgs& args)
-	: m_device(device)
-	, m_context(context)
-	, m_commandQueue(queue)
+CLSpatialPooler::CLSpatialPooler(CLContext& context, const CLTopology& topo, const CLArgs& args)
+	: m_context(context)
 	, m_topology(topo)
 	, m_args(args)
-	, m_columnDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(CLColumn))
-	, m_synapseDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * args.ColumnProximalSynapseCount* sizeof(CLSynapse))
-	, m_inputDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getInputSize() * sizeof(cl_char))
+	, m_columnData(context, m_topology.getColumns())
+	, m_synapseData(context, m_topology.getColumns() * args.ColumnProximalSynapseCount)
+	, m_inputData(context, m_topology.getInputSize())
 	, m_refineCounter(0)
 {
 	std::cerr << "CLSpatialPooler: Initializing" << std::endl;
@@ -31,34 +29,31 @@ CLSpatialPooler::CLSpatialPooler(cl::Device& device, cl::Context& context, cl::C
 	sources.push_back({definitions.c_str(), definitions.length()});
 	sources.push_back({SPATIAL_SRC, strlen(SPATIAL_SRC)});
 
-	cl::Program program(context, sources);
+	cl::Program program(context.nativeContext(), sources);
 	try
 	{
-		program.build({device});
+		program.build({context.device()});
 	}
 	catch(const cl::Error& err)
 	{
-		std::cerr << "Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+		std::cerr << "Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(context.device()) << std::endl;
 		throw;
 	}
 
-	m_computeOverlapKernel = cl::KernelFunctor(cl::Kernel(program, "computeOverlap"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-	m_inhibitNeighboursKernel = cl::KernelFunctor(cl::Kernel(program, "inhibitNeighbours"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-	m_updatePermanencesKernel = cl::KernelFunctor(cl::Kernel(program, "updatePermanences"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-	m_refineRegionKernel = cl::KernelFunctor(cl::Kernel(program, "refineRegion"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-
-	m_columnData.resize(m_topology.getColumns());
-	m_synapseData.resize(m_topology.getColumns() * m_args.ColumnProximalSynapseCount);
+	m_computeOverlapKernel = cl::KernelFunctor(cl::Kernel(program, "computeOverlap"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
+	m_inhibitNeighboursKernel = cl::KernelFunctor(cl::Kernel(program, "inhibitNeighbours"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
+	m_updatePermanencesKernel = cl::KernelFunctor(cl::Kernel(program, "updatePermanences"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
+	m_refineRegionKernel = cl::KernelFunctor(cl::Kernel(program, "refineRegion"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 
 	// Initialize region
 	cl::KernelFunctor initRegion =
-		cl::KernelFunctor(cl::Kernel(program, "initRegion"), m_commandQueue,
+	cl::KernelFunctor(cl::Kernel(program, "initRegion"), context.queue(),
 		cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 
 	cl_uint2 randomState;
 	randomState.s[0] = rand();
 	randomState.s[1] = rand();
-	initRegion(m_columnDataBuffer, m_synapseDataBuffer, randomState);
+	initRegion(m_columnData.buffer(), m_synapseData.buffer(), randomState);
 
 	std::cerr << "CLSpatialPooler: Kernels loaded" << std::endl;
 }
@@ -70,16 +65,16 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 	}
 
 	// Send given input pattern to compute device
-	m_commandQueue.enqueueWriteBuffer(m_inputDataBuffer, CL_FALSE, 0, m_topology.getInputSize() * sizeof(cl_char), &bits[0]);
+	m_inputData.enqueueWrite(false, bits);
 
 	// Phase 1: Overlap
-	m_computeOverlapKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);
+	m_computeOverlapKernel(m_columnData.buffer(), m_synapseData.buffer(), m_inputData.buffer());
 
 	// Phase 2: Inhibit neighbours
-	m_inhibitNeighboursKernel(m_columnDataBuffer, m_synapseDataBuffer);
+	m_inhibitNeighboursKernel(m_columnData.buffer(), m_synapseData.buffer());
 
 	// Phase 3: Update permanences
-	m_updatePermanencesKernel(m_columnDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);
+	m_updatePermanencesKernel(m_columnData.buffer(), m_synapseData.buffer(), m_inputData.buffer());
 
 	// Extra: Refine region (reset bad synapses) every N iterations
 	if (++m_refineCounter > 100)
@@ -87,12 +82,12 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 		cl_uint2 randomState;
 		randomState.s[0] = rand();
 		randomState.s[1] = rand();
-		m_refineRegionKernel(m_columnDataBuffer, m_synapseDataBuffer, randomState);
+		m_refineRegionKernel(m_columnData.buffer(), m_synapseData.buffer(), randomState);
 		m_refineCounter = 0;
 	}
 
 	// Download list of active columns from the compute device
-	m_commandQueue.enqueueReadBuffer(m_columnDataBuffer, CL_TRUE, 0, sizeof(CLColumn) * m_columnData.size(), &m_columnData[0]);
+	m_columnData.enqueueRead(true);
 
 	std::vector<cl_char> ret;
 	ret.reserve(m_topology.getColumns());
@@ -102,7 +97,7 @@ std::vector<cl_char> CLSpatialPooler::write(const std::vector<cl_char>& bits)
 }
 void CLSpatialPooler::getStats(CLStats& stats)
 {
-	m_commandQueue.enqueueReadBuffer(m_columnDataBuffer, CL_TRUE, 0, sizeof(CLColumn) * m_columnData.size(), &m_columnData[0]);
+	m_columnData.enqueueRead(true);
 
 	stats.averageBoost = 0;
 	stats.averageDutyCycle = 0;
@@ -118,8 +113,7 @@ void CLSpatialPooler::getStats(CLStats& stats)
 void CLSpatialPooler::backwards(const std::vector< cl_char >& columnActivation, std::vector< double >& result)
 {
 	// Make sure we're using the latest model by pulling it from the gpu..
-	//m_commandQueue.enqueueReadBuffer(m_columnDataBuffer, CL_TRUE, 0, sizeof(CLColumn) * m_columnData.size(), &m_columnData[0]);
-	m_commandQueue.enqueueReadBuffer(m_synapseDataBuffer, CL_TRUE, 0, sizeof(CLSynapse) * m_synapseData.size() , &m_synapseData[0]);
+	m_synapseData.enqueueRead(true);
 
 	result.assign(m_topology.getInputSize(), 0);
 

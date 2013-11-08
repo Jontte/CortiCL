@@ -6,6 +6,7 @@
 #include <memory>
 #include <map>
 
+#include "clcontext.h"
 #include "clspatial.h"
 #include "cltemporal.h"
 #include "cltopology.h"
@@ -29,14 +30,14 @@ struct CLStats
 class CLRegion
 {
 private:
-	cl::CommandQueue m_commandQueue;
+	CLContext& m_context;
 
 	CLSpatialPooler m_spatialPooler;
 	CLTemporalPooler m_temporalPooler;
 
 public:
 
-	CLRegion(cl::Device& device, cl::Context& context, const CLTopology& topo, const CLArgs& args);
+	CLRegion(CLContext& context, const CLTopology& topo, const CLArgs& args);
 
 	CLRegion(const CLRegion&) = delete;
 	CLRegion(CLRegion&&) = default;

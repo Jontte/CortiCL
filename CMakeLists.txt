@@ -38,6 +38,7 @@ add_library(corticl STATIC
 	src/cltemporal.cpp
 	src/clargs.cpp
 	src/cltopology.cpp
+	src/clcontext.cpp
 	${PROJECT_BINARY_DIR}/spatial.cl.h
 	${PROJECT_BINARY_DIR}/temporal.cl.h
 )

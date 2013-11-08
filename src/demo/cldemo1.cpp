@@ -28,25 +28,7 @@ void genData(int width, std::vector<cl_char>& data, double timer)
 
 void demo1Loop(SDL_Window* window, bool& spaceDown)
 {
-	// init opencl context here
-	std::vector< cl::Platform > platformList;
-	cl::Platform::get(&platformList);
-
-	if (platformList.empty())
-	{
-		throw std::runtime_error("No OpenCL platforms available");
-	}
-
-	auto& defaultPlatform = platformList.front();
-	std::vector< cl::Device > deviceList;
-	defaultPlatform.getDevices(CL_DEVICE_TYPE_ALL, &deviceList);
-	if (deviceList.empty())
-	{
-		throw std::runtime_error("OpenCL platform contains no devices");
-	}
-
-	auto& defaultDevice = deviceList.front();
-	cl::Context context({defaultDevice});
+	CLContext context;
 
 	bool done = false;
 
@@ -57,9 +39,9 @@ void demo1Loop(SDL_Window* window, bool& spaceDown)
 
 	int inhibitionRadius = 5;
 	int receptiveFieldRadius = 5;
-	CLRegion region(defaultDevice, context,
-					CLTopology::localInhibition2D(inputWidth, inputWidth, columnWidth, columnWidth, inhibitionRadius, receptiveFieldRadius),
-					CLArgs()
+	CLRegion region(context,
+		CLTopology::localInhibition2D(inputWidth, inputWidth, columnWidth, columnWidth, inhibitionRadius, receptiveFieldRadius),
+		CLArgs()
 	);
 
 	double timer = 0;

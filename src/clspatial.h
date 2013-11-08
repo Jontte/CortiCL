@@ -1,9 +1,9 @@
 #ifndef CLSPATIAL_H_INCLUDED
 #define CLSPATIAL_H_INCLUDED
 
-#define __CL_ENABLE_EXCEPTIONS
 #include <string>
-#include <CL/cl.hpp>
+#include "clcontext.h"
+#include "clbuffer.h"
 #include "cltopology.h"
 #include "clargs.h"
 
@@ -29,9 +29,7 @@ private:
 		cl_float overlapDutyCycle;
 	};
 
-	cl::Device& m_device;
-	cl::Context& m_context;
-	cl::CommandQueue& m_commandQueue;
+	CLContext& m_context;
 
 	const CLTopology m_topology;
 	const CLArgs m_args;
@@ -41,17 +39,15 @@ private:
 	cl::KernelFunctor m_updatePermanencesKernel;
 	cl::KernelFunctor m_refineRegionKernel;
 
-	std::vector<CLColumn> m_columnData;
-	std::vector<CLSynapse> m_synapseData;
-	cl::Buffer m_columnDataBuffer;
-	cl::Buffer m_synapseDataBuffer;
-	cl::Buffer m_inputDataBuffer;
-	
+	CLBuffer<CLColumn> m_columnData;
+	CLBuffer<CLSynapse> m_synapseData;
+	CLBuffer<cl_char> m_inputData;
+
 	int m_refineCounter;
 
 public:
 
-	CLSpatialPooler(cl::Device& device, cl::Context& context, cl::CommandQueue& queue, const CLTopology& topo, const CLArgs& args);
+	CLSpatialPooler(CLContext& context, const CLTopology& topo, const CLArgs& args);
 	std::vector<cl_char> write(const std::vector< cl_char >& bits);
 	void backwards(const std::vector<cl_char>& columnActivation, std::vector<double>& result);
 	void getStats(CLStats& stats);

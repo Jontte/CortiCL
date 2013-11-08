@@ -1,9 +1,9 @@
 #ifndef CLTEMPORAL_H_INCLUDED
 #define CLTEMPORAL_H_INCLUDED
 
-#define __CL_ENABLE_EXCEPTIONS
 #include <string>
-#include <CL/cl.hpp>
+#include "clcontext.h"
+#include "clbuffer.h"
 #include "cltopology.h"
 #include "clargs.h"
 
@@ -56,9 +56,7 @@ private:
 		cl_uchar state;
 	};
 
-	cl::Device& m_device;
-	cl::Context& m_context;
-	cl::CommandQueue& m_commandQueue;
+	CLContext& m_context;
 
 	const CLTopology m_topology;
 	const CLArgs m_args;
@@ -69,13 +67,10 @@ private:
 	cl::KernelFunctor m_updateSynapsesKernel;
 	cl::KernelFunctor m_refineRegionKernel;
 
-	std::vector<CLCell> m_cellData;
-	std::vector<CLSegment> m_segmentData;
-	std::vector<CLSynapse> m_synapseData;
-	cl::Buffer m_cellDataBuffer;
-	cl::Buffer m_segmentDataBuffer;
-	cl::Buffer m_synapseDataBuffer;
-	cl::Buffer m_inputDataBuffer;
+	CLBuffer<CLCell> m_cellData;
+	CLBuffer<CLSegment> m_segmentData;
+	CLBuffer<CLSynapse> m_synapseData;
+	CLBuffer<cl_char> m_inputData;
 
 	int m_refineCounter;
 
@@ -84,7 +79,7 @@ private:
 
 public:
 
-	CLTemporalPooler(cl::Device& device, cl::Context& context, cl::CommandQueue& queue, const CLTopology& topo, const CLArgs& args);
+	CLTemporalPooler(CLContext& context, const CLTopology& topo, const CLArgs& args);
 	void write(const std::vector< cl_char >& activations_in, std::vector< cl_char >& results_out);
 	void getStats(CLStats& stats);
 };

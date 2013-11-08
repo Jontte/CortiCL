@@ -12,16 +12,14 @@ constexpr static const char* TEMPORAL_SRC =
 #include "temporal.cl.h"
 ;
 
-CLTemporalPooler::CLTemporalPooler(cl::Device& device, cl::Context& context, cl::CommandQueue& queue, const CLTopology& topo, const CLArgs& args)
-	: m_device(device)
-	, m_context(context)
-	, m_commandQueue(queue)
+CLTemporalPooler::CLTemporalPooler(CLContext& context, const CLTopology& topo, const CLArgs& args)
+	: m_context(context)
 	, m_topology(topo)
 	, m_args(args)
-	, m_cellDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(CLCell) * args.ColumnCellCount)
-	, m_segmentDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(CLSegment) * args.ColumnCellCount * args.CellSegmentCount)
-	, m_synapseDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(CLSynapse) * args.ColumnCellCount * args.CellSegmentCount * args.SegmentSynapseCount)
-	, m_inputDataBuffer(context, CL_MEM_READ_WRITE, m_topology.getColumns() * sizeof(cl_char))
+	, m_cellData(context, m_topology.getColumns() * args.ColumnCellCount)
+	, m_segmentData(context, m_topology.getColumns() * args.ColumnCellCount * args.CellSegmentCount)
+	, m_synapseData(context, m_topology.getColumns() * args.ColumnCellCount * args.CellSegmentCount * args.SegmentSynapseCount)
+	, m_inputData(context, m_topology.getColumns())
 	, m_refineCounter(0)
 {
 	std::cerr << "CLTemporalPooler: Initializing" << std::endl;
@@ -33,58 +31,53 @@ CLTemporalPooler::CLTemporalPooler(cl::Device& device, cl::Context& context, cl:
 	sources.push_back({definitions.c_str(), definitions.length()});
 	sources.push_back({TEMPORAL_SRC, strlen(TEMPORAL_SRC)});
 
-	cl::Program program(context, sources);
+	cl::Program program(context.nativeContext(), sources);
 	try
 	{
-		program.build({device});
+		program.build({context.device()});
 	}
 	catch(const cl::Error& err)
 	{
-		std::cerr << "Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+		std::cerr << "Error building: " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(context.device()) << std::endl;
 		throw;
 	}
 
-	m_timeStepKernel = cl::KernelFunctor(cl::Kernel(program, "timeStep"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-	m_computeActiveStateKernel = cl::KernelFunctor(cl::Kernel(program, "computeActiveState"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-	m_computePredictiveState = cl::KernelFunctor(cl::Kernel(program, "computePredictiveState"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-	m_updateSynapsesKernel = cl::KernelFunctor(cl::Kernel(program, "updateSynapses"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-	m_refineRegionKernel = cl::KernelFunctor(cl::Kernel(program, "refineRegion"), m_commandQueue, cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-
-	// Initialize all columns
-	m_cellData.resize(m_topology.getColumns() * args.ColumnCellCount);
-	m_segmentData.resize(m_topology.getColumns() * args.ColumnCellCount * args.CellSegmentCount);
-	m_synapseData.resize(m_topology.getColumns() * args.ColumnCellCount * args.CellSegmentCount * args.SegmentSynapseCount);
+	m_timeStepKernel = cl::KernelFunctor(cl::Kernel(program, "timeStep"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
+	m_computeActiveStateKernel = cl::KernelFunctor(cl::Kernel(program, "computeActiveState"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
+	m_computePredictiveState = cl::KernelFunctor(cl::Kernel(program, "computePredictiveState"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
+	m_updateSynapsesKernel = cl::KernelFunctor(cl::Kernel(program, "updateSynapses"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
+	m_refineRegionKernel = cl::KernelFunctor(cl::Kernel(program, "refineRegion"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 
 	// Initialize region
 	cl::KernelFunctor initRegion =
-		cl::KernelFunctor(cl::Kernel(program, "initRegion"), m_commandQueue,
+	cl::KernelFunctor(cl::Kernel(program, "initRegion"), context.queue(),
 		cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 
 	cl_uint2 randomState;
 	randomState.s[0] = rand();
 	randomState.s[1] = rand();
-	initRegion(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer, randomState);
+	initRegion(m_cellData.buffer(), m_segmentData.buffer(), m_synapseData.buffer(), randomState);
 	std::cerr << "CLTemporalPooler: Kernels loaded" << std::endl;
 }
 void CLTemporalPooler::pullBuffers(bool cells, bool segments, bool synapses)
 {
 	if (cells)
-		m_commandQueue.enqueueReadBuffer(m_cellDataBuffer, CL_FALSE, 0, sizeof(CLCell) * m_cellData.size(), &m_cellData[0]);
+		m_cellData.enqueueRead(false);
 	if (segments)
-		m_commandQueue.enqueueReadBuffer(m_segmentDataBuffer, CL_FALSE, 0, sizeof(CLSegment) * m_segmentData.size(), &m_segmentData[0]);
+		m_segmentData.enqueueRead(false);
 	if (synapses)
-		m_commandQueue.enqueueReadBuffer(m_synapseDataBuffer, CL_FALSE, 0, sizeof(CLSynapse) * m_synapseData.size(), &m_synapseData[0]);
-	m_commandQueue.finish();
+		m_synapseData.enqueueRead(false);
+	m_context.queue().finish();
 }
 void CLTemporalPooler::pushBuffers(bool cells, bool segments, bool synapses)
 {
 	if (cells)
-		m_commandQueue.enqueueWriteBuffer(m_cellDataBuffer, CL_FALSE, 0, sizeof(CLCell) * m_cellData.size(), &m_cellData[0]);
+		m_cellData.enqueueWrite(false);
 	if (segments)
-		m_commandQueue.enqueueWriteBuffer(m_segmentDataBuffer, CL_FALSE, 0, sizeof(CLSegment) * m_segmentData.size(), &m_segmentData[0]);
+		m_segmentData.enqueueWrite(false);
 	if (synapses)
-		m_commandQueue.enqueueWriteBuffer(m_synapseDataBuffer, CL_FALSE, 0, sizeof(CLSynapse) * m_synapseData.size() , &m_synapseData[0]);
-	m_commandQueue.finish();
+		m_synapseData.enqueueWrite(false);
+	m_context.queue().finish();
 }
 
 void CLTemporalPooler::write(const std::vector< cl_char >& activations_in, std::vector< cl_char >& results_out)
@@ -95,7 +88,7 @@ void CLTemporalPooler::write(const std::vector< cl_char >& activations_in, std::
 	}
 
 	// Send input column activations to device
-	m_commandQueue.enqueueWriteBuffer(m_inputDataBuffer, CL_TRUE, 0, m_topology.getColumns() * sizeof(cl_char), &activations_in[0]);
+	m_inputData.enqueueWrite(true, activations_in);
 
 	// provide GPU some poor man's randomness
 	cl_uint2 randomSeed;
@@ -103,16 +96,16 @@ void CLTemporalPooler::write(const std::vector< cl_char >& activations_in, std::
 	randomSeed.s[1] = rand();
 
 	// Phase 0: Step forwards in time
-	m_timeStepKernel(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer);
+	m_timeStepKernel(m_cellData.buffer(), m_segmentData.buffer(), m_synapseData.buffer());
 
 	// Phase 1: Compute active state for each cell
-	m_computeActiveStateKernel(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer, m_inputDataBuffer, randomSeed);
+	m_computeActiveStateKernel(m_cellData.buffer(), m_segmentData.buffer(), m_synapseData.buffer(), m_inputData.buffer(), randomSeed);
 
 	// Phase 2: Compute predictive state for each cell
-	m_computePredictiveState(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer, m_inputDataBuffer, randomSeed);
+	m_computePredictiveState(m_cellData.buffer(), m_segmentData.buffer(), m_synapseData.buffer(), m_inputData.buffer(), randomSeed);
 
 	// Phase 3: Update permanences
-	m_updateSynapsesKernel(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer, m_inputDataBuffer);
+	m_updateSynapsesKernel(m_cellData.buffer(), m_segmentData.buffer(), m_synapseData.buffer(), m_inputData.buffer());
 
 	// Extra: Refine region (reset bad synapses) every N iterations
 	if (++m_refineCounter > 10)
@@ -120,13 +113,13 @@ void CLTemporalPooler::write(const std::vector< cl_char >& activations_in, std::
 		cl_uint2 randomState;
 		randomState.s[0] = rand();
 		randomState.s[1] = rand();
-		m_refineRegionKernel(m_cellDataBuffer, m_segmentDataBuffer, m_synapseDataBuffer, randomState);
+		m_refineRegionKernel(m_cellData.buffer(), m_segmentData.buffer(), m_synapseData.buffer(), randomState);
 		m_refineCounter = 0;
 	}
 
 	// Obtain result (list of column activity) from compute device and save to results_out
 	results_out.resize(m_topology.getColumns());
-	m_commandQueue.enqueueReadBuffer(m_inputDataBuffer, CL_TRUE, 0, sizeof(cl_char) * m_topology.getColumns(), &results_out[0]);
+	m_inputData.enqueueRead(true, results_out);
 }
 
 void CLTemporalPooler::getStats(CLStats& stats)
