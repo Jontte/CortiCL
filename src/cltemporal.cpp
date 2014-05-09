@@ -20,7 +20,6 @@ CLTemporalPooler::CLTemporalPooler(CLContext& context, const CLTopology& topo, c
 	, m_segmentData(context, m_topology.getColumns() * args.ColumnCellCount * args.CellSegmentCount)
 	, m_synapseData(context, m_topology.getColumns() * args.ColumnCellCount * args.CellSegmentCount * args.SegmentSynapseCount)
 	, m_inputData(context, m_topology.getColumns())
-	, m_refineCounter(0)
 {
 	std::cerr << "CLTemporalPooler: Initializing" << std::endl;
 
@@ -46,8 +45,7 @@ CLTemporalPooler::CLTemporalPooler(CLContext& context, const CLTopology& topo, c
 	m_computeActiveStateKernel = cl::KernelFunctor(cl::Kernel(program, "computeActiveState"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 	m_computePredictiveState = cl::KernelFunctor(cl::Kernel(program, "computePredictiveState"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
 	m_updateSynapsesKernel = cl::KernelFunctor(cl::Kernel(program, "updateSynapses"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-	m_refineRegionKernel = cl::KernelFunctor(cl::Kernel(program, "refineRegion"), context.queue(), cl::NullRange, cl::NDRange(m_topology.getColumns()), cl::NullRange);
-
+	
 	// Initialize region
 	cl::KernelFunctor initRegion =
 	cl::KernelFunctor(cl::Kernel(program, "initRegion"), context.queue(),
@@ -106,16 +104,6 @@ void CLTemporalPooler::write(const std::vector< cl_char >& activations_in, std::
 
 	// Phase 3: Update permanences
 	m_updateSynapsesKernel(m_cellData.buffer(), m_segmentData.buffer(), m_synapseData.buffer(), m_inputData.buffer());
-
-	// Extra: Refine region (reset bad synapses) every N iterations
-	if (++m_refineCounter > 10)
-	{
-		cl_uint2 randomState;
-		randomState.s[0] = rand();
-		randomState.s[1] = rand();
-		m_refineRegionKernel(m_cellData.buffer(), m_segmentData.buffer(), m_synapseData.buffer(), randomState);
-		m_refineCounter = 0;
-	}
 
 	// Obtain result (list of column activity) from compute device and save to results_out
 	results_out.resize(m_topology.getColumns());

@@ -424,45 +424,6 @@ void kernel initRegion(
 	}
 }
 
-// Reset segment with the worst duty cycle
-void kernel refineRegion(
-	global Cell* g_cells,
-	global Segment* g_segments,
-	global Synapse* g_synapses,
-	uint2 randomState)
-{
-	State state = makeState(g_cells, g_segments, g_synapses);
-	int columnIdx = get_global_id(0);
-
-	// Get cells of the current column
-	global Cell* cells = getCells(&state, columnIdx);
-
-	for (int i = 0 ; i < COLUMN_CELL_COUNT; ++i)
-	{
-		global Cell* cell = cells + i;
-
-		float worstDutyCycle = 0;
-		int worstDutyCycleIndex = -1;
-
-		global Segment* segments = getSegments(&state, columnIdx, i);
-		for (int a = 0; a < CELL_SEGMENT_COUNT; ++a)
-		{
-			global Segment* segment = segments+a;
-			if (segment->activeDutyCycle < worstDutyCycle || a == 0)
-			{
-				worstDutyCycle = segment->activeDutyCycle;
-				worstDutyCycleIndex = a;
-			}
-		}
-
-		global Synapse* synapses = getSynapses(&state, columnIdx, i, worstDutyCycleIndex);
-		for (int a = 0; a < SEGMENT_SYNAPSE_COUNT; ++a)
-		{
-			resetSynapse(&state, synapses+a, true, NOW, &randomState);
-		}
-	}
-}
-
 void kernel timeStep(
 	global Cell* g_cells,
 	global Segment* g_segments,

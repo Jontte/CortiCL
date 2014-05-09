@@ -65,14 +65,11 @@ private:
 	cl::KernelFunctor m_computeActiveStateKernel;
 	cl::KernelFunctor m_computePredictiveState;
 	cl::KernelFunctor m_updateSynapsesKernel;
-	cl::KernelFunctor m_refineRegionKernel;
 
 	CLBuffer<CLCell> m_cellData;
 	CLBuffer<CLSegment> m_segmentData;
 	CLBuffer<CLSynapse> m_synapseData;
 	CLBuffer<cl_char> m_inputData;
-
-	int m_refineCounter;
 
 	void pushBuffers(bool cells = true, bool segments = true, bool synapses = true);
 	void pullBuffers(bool cells = true, bool segments = true, bool synapses = true);
