@@ -2,7 +2,12 @@
 #define CLCONTEXT_H_DEFINED
 
 #define __CL_ENABLE_EXCEPTIONS
+
+#ifdef __APPLE__
+#include <OpenCL/opencl.hpp>
+#else
 #include <CL/cl.hpp>
+#endif
 
 class CLContext
 {
