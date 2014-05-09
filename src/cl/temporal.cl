@@ -677,7 +677,7 @@ void kernel updateSynapses(
 				segment->activeDutyCycle += active * (1.0f - persistence);
 			}
 		}
-		if (getCellState(cell->state, NOW, PREDICTIVESTATE))
+		if (getCellState(cell->state, NOW, ACTIVESTATE|PREDICTIVESTATE))
 		{
 			columnActive = true;
 		}
