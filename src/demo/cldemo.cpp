@@ -20,6 +20,15 @@ void checkEvents(bool* quit)
 		{
 			spaceDown = false;
 		}
+		if( e.type == SDL_WINDOWEVENT )
+		{
+			if (e.window.event == SDL_WINDOWEVENT_RESIZED)
+			{
+				int w = e.window.data1;
+				int h = e.window.data2;
+				glViewport( 0, 0, ( GLsizei )w, ( GLsizei )h );
+			}
+		}
 // 		if (e.type == SDL_MOUSEBUTTONDOWN)
 // 			*quit = true;
 	}
@@ -37,7 +46,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	SDL_Window* window = SDL_CreateWindow("cldemo", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 800, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+	SDL_Window* window = SDL_CreateWindow("cldemo", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 800, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 // 	SDL_Window* window = SDL_CreateWindow("cldemo", 200, 200, 800, 800, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 	if (window == nullptr)
 	{
